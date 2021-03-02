@@ -46,9 +46,9 @@ parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degr
 parser.add_option("--num_epochs", type="int", dest="num_epochs", help="Number of epochs.", default=50)
 parser.add_option("--config_filename", dest="config_filename", help=
 				"Location to store all the metadata related to the training (to be used when testing).",
-				default="config.pickle")
+				default="config_rpn.pickle")
 parser.add_option("--elen", dest="epoch_length", help="set the epoch length. def=1000", type="int", default=1000)
-parser.add_option("--output_weight_path", dest="output_weight_path", help="Output path for weights.", default='./model_frcnn.hdf5')
+parser.add_option("--output_weight_path", dest="output_weight_path", help="Output path for weights.", default='./model_frcnn.hdf5') #not really used 
 parser.add_option("--input_weight_path", dest="input_weight_path", help="Input path for weights. If not specified, will try to load default weights provided by keras.")
 
 (options, args) = parser.parse_args()
@@ -194,11 +194,12 @@ except:
 
 # compile model
 optimizer = Adam(lr=1e-5, clipnorm=0.001)
+
 model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(num_anchors), losses.rpn_loss_regr(num_anchors)])
 model_rpn.summary()
 
 # write training misc here
-epoch_length = 100
+epoch_length = options.epoch_length
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
@@ -213,6 +214,7 @@ class_mapping_inv = {v: k for k, v in class_mapping.items()}
 print('Starting training')
 
 vis = True
+
 
 
 # start acutual training here

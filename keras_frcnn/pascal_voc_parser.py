@@ -5,106 +5,113 @@ import numpy as np
 
 
 def get_data(input_path, cat=None):
-	all_imgs = []
+    all_imgs = []
 
-	classes_count = {}
+    classes_count = {}
 
-	class_mapping = {}
+    class_mapping = {}
 
-	visualise = False
+    visualise = False
 
-	data_paths = [os.path.join(input_path,s) for s in ['VOC2007']] #add VOC2012 if using.
-	print("data path:", data_paths)	
+    # add VOC2012 if using.
+    # data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
+    data_paths = [os.path.join(input_path,s) for s in ['VOC2007', 'VOC2012']]
+    print("data path:", data_paths)
 
-	print('Parsing annotation files')
+    print('Parsing annotation files')
 
-	for data_path in data_paths:
+    for data_path in data_paths:
 
-		annot_path = os.path.join(data_path, 'Annotations')
-		imgs_path = os.path.join(data_path, 'JPEGImages')
+        annot_path = os.path.join(data_path, 'Annotations')
+        imgs_path = os.path.join(data_path, 'JPEGImages')
 
-		# load all train images or only one category.
-		imgsets_path_trainval = os.path.join(data_path, 'ImageSets','Main','train.txt')
-		imgsets_path_test = os.path.join(data_path, 'ImageSets','Main','val.txt')
+        # load all train images or only one category.
+        #ignore all val images and treat them as train images 
+        imgsets_path_trainval = os.path.join(
+            data_path, 'ImageSets', 'Main', 'trainval.txt')
+        imgsets_path_test = os.path.join(
+            data_path, 'ImageSets', 'Main', 'test.txt')
 
-		trainval_files = []
-		test_files = []
-		try:
-			with open(imgsets_path_trainval) as f:
-				for line in f:
-					trainval_files.append(line.strip() + '.jpg')
-		except Exception as e:
-			print(e)
+        trainval_files = []
+        test_files = []
+        try:
+            with open(imgsets_path_trainval) as f:
+                for line in f:
+                    trainval_files.append(line.strip() + '.jpg')
+        except Exception as e:
+            print(e)
 
-		try:
-			with open(imgsets_path_test) as f:
-				for line in f:
-					test_files.append(line.strip() + '.jpg')
-		except Exception as e:
-			if data_path[-7:] == 'VOC2012':
-				# this is expected, most pascal voc distibutions dont have the test.txt file
-				pass
-			else:
-				print(e)
-		
-		annots = [os.path.join(annot_path, s) for s in os.listdir(annot_path)]
-		idx = 0
-		for annot in annots:
-			try:
-				idx += 1
+        try:
+            with open(imgsets_path_test) as f:
+                for line in f:
+                    test_files.append(line.strip() + '.jpg')
+                   
 
-				et = ET.parse(annot)
-				element = et.getroot()
+        except Exception as e:
+            if data_path[-7:] == 'VOC2012':
+                # this is expected, most pascal voc distibutions dont have the test.txt file
+                pass
+            else:
+                print(e)
 
-				element_objs = element.findall('object')
-				element_filename = element.find('filename').text
-				element_width = int(element.find('size').find('width').text)
-				element_height = int(element.find('size').find('height').text)
+        annots = [os.path.join(annot_path, s) for s in os.listdir(annot_path)]
+        idx = 0
+        for annot in annots:
+            try:
+                idx += 1
 
-				if len(element_objs) > 0:
-					annotation_data = {'filepath': os.path.join(imgs_path, element_filename), 'width': element_width,
-									   'height': element_height, 'bboxes': []}
+                et = ET.parse(annot)
+                element = et.getroot()
 
-					if element_filename in trainval_files:
-						annotation_data['imageset'] = 'trainval'
-					elif element_filename in test_files:
-						annotation_data['imageset'] = 'test'
-					else:
-						annotation_data['imageset'] = 'trainval'
+                element_objs = element.findall('object')
+                element_filename = element.find('filename').text
+                element_width = int(element.find('size').find('width').text)
+                element_height = int(element.find('size').find('height').text)
 
-				for element_obj in element_objs:
-					class_name = element_obj.find('name').text
-					if class_name not in classes_count:
-						classes_count[class_name] = 1
-					else:
-						classes_count[class_name] += 1
+                if len(element_objs) > 0:
+                    annotation_data = {'filepath': os.path.join(imgs_path, element_filename), 'width': element_width,
+                                       'height': element_height, 'bboxes': []}
 
-					if class_name not in class_mapping:
-						class_mapping[class_name] = len(class_mapping)
+                    if element_filename in trainval_files: #if the image id appears in the trainval list 
+                        annotation_data['imageset'] = 'trainval'
+                    elif element_filename in test_files: #if the image id appears in the test list ("test.txt")
+                        annotation_data['imageset'] = 'test'
+                    else: #everything else goes to the trainval 
+                        annotation_data['imageset'] = 'trainval'
 
-					obj_bbox = element_obj.find('bndbox')
-					x1 = int(round(float(obj_bbox.find('xmin').text)))
-					y1 = int(round(float(obj_bbox.find('ymin').text)))
-					x2 = int(round(float(obj_bbox.find('xmax').text)))
-					y2 = int(round(float(obj_bbox.find('ymax').text)))
-					difficulty = 1 # parse all files.
-					annotation_data['bboxes'].append(
-						{'class': class_name, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'difficult': difficulty})
-				
-				if cat and class_name == cat:
-                                    all_imgs.append(annotation_data)
-				elif not cat:
-                                    all_imgs.append(annotation_data) 
+                for element_obj in element_objs:
+                    class_name = element_obj.find('name').text
+                    if class_name not in classes_count:
+                        classes_count[class_name] = 1
+                    else:
+                        classes_count[class_name] += 1
 
-				if visualise:
-					img = cv2.imread(annotation_data['filepath'])
-					for bbox in annotation_data['bboxes']:
-						cv2.rectangle(img, (bbox['x1'], bbox['y1']), (bbox[
-									  'x2'], bbox['y2']), (0, 0, 255))
-					cv2.imshow('img', img)
-					cv2.waitKey(0)
+                    if class_name not in class_mapping:
+                        class_mapping[class_name] = len(class_mapping)
 
-			except Exception as e:
-				print(e)
-				continue
-	return all_imgs, classes_count, class_mapping
+                    obj_bbox = element_obj.find('bndbox')
+                    x1 = int(round(float(obj_bbox.find('xmin').text)))
+                    y1 = int(round(float(obj_bbox.find('ymin').text)))
+                    x2 = int(round(float(obj_bbox.find('xmax').text)))
+                    y2 = int(round(float(obj_bbox.find('ymax').text)))
+                    difficulty = 1  # parse all files.
+                    annotation_data['bboxes'].append(
+                        {'class': class_name, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'difficult': difficulty})
+
+                if cat and class_name == cat:
+                    all_imgs.append(annotation_data)
+                elif not cat:
+                    all_imgs.append(annotation_data)
+
+                if visualise:
+                    img = cv2.imread(annotation_data['filepath'])
+                    for bbox in annotation_data['bboxes']:
+                        cv2.rectangle(img, (bbox['x1'], bbox['y1']), (bbox[
+                            'x2'], bbox['y2']), (0, 0, 255))
+                    cv2.imshow('img', img)
+                    cv2.waitKey(0)
+
+            except Exception as e:
+                print(e)
+                continue
+    return all_imgs, classes_count, class_mapping

@@ -12,6 +12,10 @@ from keras.layers import Input
 from keras.models import Model
 from keras_frcnn import roi_helpers
 from keras.applications.mobilenet import preprocess_input
+from keras_frcnn.pascal_voc import pascal_voc_util
+from keras_frcnn.pascal_voc_parser import get_data
+from bs4 import BeautifulSoup
+from imutils import paths
 
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
@@ -31,6 +35,7 @@ parser.add_option("--config_filename", dest="config_filename", help=
 				default="config.pickle")
 parser.add_option("--network", dest="network", help="Base network to use. Supports vgg or resnet50.", default='resnet50')
 parser.add_option("--write", dest="write", help="to write out the image with detections or not.", action='store_true')
+parser.add_option("--gt",dest="gt",help="Whether to wrrite out images with ground truth boudning boxes for the VOC dataset", default=False)
 parser.add_option("--load", dest="load", help="specify model path.", default=None)
 (options, args) = parser.parse_args()
 
@@ -180,24 +185,32 @@ else:
 #model_rpn.compile(optimizer='adam', loss='mse')
 #model_classifier.compile(optimizer='adam', loss='mse')
 
+model_rpn.compile(optimizer='sgd', loss='mse')
+model_classifier.compile(optimizer='sgd', loss='mse')
+
 all_imgs = []
 
 classes = {}
 
-bbox_threshold = 0.5
+# If the box classification value is less than this, we ignore this box
+bbox_threshold = 0.7
 
 visualise = True
 
 num_rois = C.num_rois
 
+
+#iterate over the testing images in the directory 
 for idx, img_name in enumerate(sorted(os.listdir(img_path))):
+	
 	if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
 		continue
 	print(img_name)
 	st = time.time()
 	filepath = os.path.join(img_path,img_name)
-
+    
 	img = cv2.imread(filepath)
+	gt_img=cv2.imread(filepath)
 
     # preprocess image
 	X, ratio = format_img(img, C)
@@ -207,8 +220,8 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	# get the feature maps and output from the RPN
 	[Y1, Y2, F] = model_rpn.predict(X)
 	
-
-	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.3)
+	#overlap_thresh: If iou in NMS is larger than this threshold, drop the box
+	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.8)
 	print(R.shape)
     
 	# convert from (x1,y1,x2,y2) to (x,y,w,h)
@@ -233,11 +246,11 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 			ROIs = ROIs_padded
 
 		[P_cls,P_regr] = model_classifier.predict([F, ROIs])
-		print(P_cls)
+		
 
 		for ii in range(P_cls.shape[1]):
-
-			if np.max(P_cls[0,ii,:]) < 0.8 or np.argmax(P_cls[0,ii,:]) == (P_cls.shape[2] - 1):
+             # Ignore 'bg' class or those with prob lower than the threshold 
+			if np.max(P_cls[0,ii,:]) < bbox_threshold or np.argmax(P_cls[0,ii,:]) == (P_cls.shape[2] - 1):
 				continue
 
 			cls_name = class_mapping[np.argmax(P_cls[0,ii,:])]
@@ -257,22 +270,25 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 		print(len(bboxes[key]))
 		bbox = np.array(bboxes[key])
 
-		new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh = 0.3)
+		#the higher the overlap threshold, the more overlapping boxes there are 
+		new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh = 0.1)
 		for jk in range(new_boxes.shape[0]):
 			(x1, y1, x2, y2) = new_boxes[jk,:]
-			(real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
+			(real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2) #get the real coordinate in the original image
 
 			cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
 
 			textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
 			all_dets.append((key,100*new_probs[jk]))
 
-			(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
-			textOrg = (real_x1, real_y1-0)
+			(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,0.5,1)
+			textOrg = ((real_x1+real_x2)//2, (real_y1+real_y2)//2)
 
 			cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
 			cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
-			cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+			cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 0), 1)
+	
+	
 
 	print('Elapsed time = {}'.format(time.time() - st))
 	print(all_dets)
@@ -283,3 +299,42 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
            if not os.path.isdir("results"):
               os.mkdir("results")
            cv2.imwrite('./results/{}.png'.format(idx),img)
+
+	#if the user requested the ground truth images to be printed, write them with the gt bounding boxes to a new directory 
+	if options.gt: 
+		#extract the file name from the file path and use it to derive the path to the XML file 
+		ANNOT_FOLDER="./TEST/VOCdevkit/VOC2007/Annotations" #change this to the path of your test annotation folder (for VOC dataset) 
+		filename = img_name[:img_name.rfind(".")] #extract the name (e.g. extract "a" from "a.jpg")
+		annotPath = os.path.sep.join([ANNOT_FOLDER,"{}.xml".format(filename)])
+		# load the annotation file, build the soup, and initialize our list of ground-truth bounding boxes
+		contents = open(annotPath).read()
+		soup = BeautifulSoup(contents, "html.parser")
+		 # extract the image dimensions
+		w = int(float(soup.find("width").string))
+		h = int(float(soup.find("height").string))
+
+		# loop over all 'object' elements
+
+		for o in soup.find_all("object"):
+			# extract the label and bounding box coordinates
+			label = o.find("name").string  # label
+			xMin = int(float(o.find("xmin").string))
+			yMin = int(float(o.find("ymin").string))
+			xMax = int(float(o.find("xmax").string))
+			yMax = int(float(o.find("ymax").string))
+
+			# truncate any bounding box coordinates that may fall outside the boundaries of the image 
+
+			cv2.rectangle(gt_img, (xMin,yMin), (xMax,yMax), (255,0,0), 3)
+			font = cv2.FONT_HERSHEY_SIMPLEX
+			cv2.putText(gt_img, label, (xMin,yMin-10), font, 0.8, (0,255,0), 2)
+
+		if not os.path.isdir("results_gt"): #create new directory "results_gt" to hold all the pics with gt bounding boxes 
+			os.mkdir("results_gt")
+		cv2.imwrite('./results_gt/{}.png'.format(idx),gt_img)
+
+
+
+
+		
+

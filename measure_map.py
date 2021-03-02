@@ -6,7 +6,7 @@ import pickle
 from optparse import OptionParser
 import time
 from keras_frcnn import config
-import keras_frcnn.resnet as nn
+import keras_frcnn.vgg as nn
 from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
@@ -85,7 +85,9 @@ parser.add_option("--config_filename", dest="config_filename", help=
 				"Location to read the metadata related to the training (generated when training).",
 				default="config.pickle")
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
-				default="pascal_voc"),
+				default="pascal_voc")
+parser.add_option("--load", dest="load", help="specify model path.", default=None)
+(options, args) = parser.parse_args()
 
 (options, args) = parser.parse_args()
 
@@ -102,7 +104,7 @@ else:
 
 config_output_filename = options.config_filename
 
-with open(config_output_filename, 'r') as f_in:
+with open(config_output_filename, 'rb') as f_in:
 	C = pickle.load(f_in)
 
 # turn off any data augmentation at test time
@@ -144,17 +146,17 @@ class_mapping = C.class_mapping
 if 'bg' not in class_mapping:
 	class_mapping['bg'] = len(class_mapping)
 
-class_mapping = {v: k for k, v in class_mapping.iteritems()}
+class_mapping = {v: k for k, v in class_mapping.items()}
 print(class_mapping)
 class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 C.num_rois = int(options.num_rois)
 
 if K.image_dim_ordering() == 'th':
 	input_shape_img = (3, None, None)
-	input_shape_features = (1024, None, None)
+	input_shape_features = (512, None, None)
 else:
 	input_shape_img = (None, None, 3)
-	input_shape_features = (None, None, 1024)
+	input_shape_features = (None, None, 512)
 
 
 img_input = Input(shape=input_shape_img)
@@ -175,8 +177,18 @@ model_classifier_only = Model([feature_map_input, roi_input], classifier)
 
 model_classifier = Model([feature_map_input, roi_input], classifier)
 
-model_rpn.load_weights(C.model_path, by_name=True)
-model_classifier.load_weights(C.model_path, by_name=True)
+# model_rpn.load_weights(C.model_path, by_name=True)
+# model_classifier.load_weights(C.model_path, by_name=True)
+
+# model loading
+if options.load == None:
+  print('Loading weights from {}'.format(C.model_path))
+  model_rpn.load_weights(C.model_path, by_name=True)
+  model_classifier.load_weights(C.model_path, by_name=True)
+else:
+  print('Loading weights from {}'.format(options.load))
+  model_rpn.load_weights(options.load, by_name=True)
+  model_classifier.load_weights(options.load, by_name=True)
 
 model_rpn.compile(optimizer='sgd', loss='mse')
 model_classifier.compile(optimizer='sgd', loss='mse')

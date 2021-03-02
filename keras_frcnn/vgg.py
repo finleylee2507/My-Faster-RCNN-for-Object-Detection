@@ -55,42 +55,43 @@ def nn_base(input_tensor=None, trainable=False):
     else:
         bn_axis = 1
 
+#add trainable variable 
     # Block 1
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1')(img_input)
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1',trainable=trainable)(img_input)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2',trainable=trainable)(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)
 
     # Block 2
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1')(x)
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2')(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1',trainable=trainable)(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2',trainable=trainable)(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)
 
     # Block 3
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1',trainable=trainable)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2',trainable=trainable)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3',trainable=trainable)(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
 
     # Block 4
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1',trainable=trainable)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2',trainable=trainable)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3',trainable=trainable)(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)
 
     # Block 5
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1',trainable=trainable)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2',trainable=trainable)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3',trainable=trainable)(x)
     # x = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)
 
     return x
 
-def rpn(base_layers, num_anchors):
+def rpn(base_layers, num_anchors,trainable=True):
 
-    x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1')(base_layers)
+    x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1',trainable=trainable)(base_layers) #perform convolution on the feature map 
 
-    x_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x)
-    x_regr = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(x)
+    x_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class',trainable=trainable)(x)
+    x_regr = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress',trainable=trainable)(x)
 
     return [x_class, x_regr, base_layers]
 

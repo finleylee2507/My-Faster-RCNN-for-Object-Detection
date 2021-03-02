@@ -14,6 +14,7 @@ from keras_frcnn import roi_helpers
 from keras_frcnn.pascal_voc import pascal_voc_util
 from keras_frcnn.pascal_voc_parser import get_data
 from keras_frcnn import data_generators
+import random
 
 from utils import get_bbox
 
@@ -179,10 +180,11 @@ bbox_threshold = 0.8
 visualise = True
 
 # define pascal
-pascal = pascal_voc_util(options.test_path)
+# pascal = pascal_voc_util(options.test_path)
 
 # define dataloader
-all_imgs, classes_count, class_mapping = get_data(options.test_path)
+all_imgs, classes_count, _ = get_data(options.test_path)
+
 val_imgs = [s for s in all_imgs if s['imageset'] == 'test']
 if len(val_imgs) == 0:
     print("val images not found. using trainval images for testing.")
@@ -195,13 +197,16 @@ img_pathes = [x["filepath"] for x in val_imgs]
 
 # define detections
 all_boxes = [[[] for _ in range(len(val_imgs))] for _ in range(20)]
+image_index = sorted(img_pathes)
+image_index=random.sample(image_index,1) #randomly select images from the list 
 
-for idx, img_name in enumerate(sorted(img_pathes)):
+for idx, img_name in enumerate(sorted(image_index)):
 	if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
 		continue
 	print(img_name)
 	st = time.time()
-	filepath = os.path.join(img_path,img_name)
+	# filepath = os.path.join(img_path,img_name)
+	filepath=img_name
 
 	img = cv2.imread(filepath)
 
@@ -248,6 +253,8 @@ for idx, img_name in enumerate(sorted(img_pathes)):
 #				print("no boxes detected")
 				continue
 			print(P_cls[0, ii, :])
+			print(np.argmax(P_cls[0, ii, :]))
+			print(class_mapping)
 			cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
 
 			if cls_name not in bboxes:
@@ -278,18 +285,18 @@ for idx, img_name in enumerate(sorted(img_pathes)):
 
 			(real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
 
-#			cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
+			cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
 			textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
 			all_dets.append((key,100*new_probs[jk]))
 			(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
-#			textOrg = (real_x1, real_y1-0)            
+			textOrg = (real_x1, real_y1-0)            
 
 	print('Elapsed time = {}'.format(time.time() - st))
 	print("det:", all_dets)
 	print("boxes:", bboxes)
     # enable if you want to show pics
-	#cv2.imshow('img', img)
-	#cv2.waitKey(0)
+	cv2.imshow('img', img)
+	cv2.waitKey(0)
 	if options.write:
            import os
            if not os.path.isdir("results"):

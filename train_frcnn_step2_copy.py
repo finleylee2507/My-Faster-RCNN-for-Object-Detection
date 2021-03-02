@@ -1,3 +1,5 @@
+#this is step 2 of the alternating training, where we would train the detector independently using the regions proposed by the rpn layer
+
 from __future__ import division
 import random
 import pprint
@@ -32,17 +34,19 @@ parser = OptionParser()
 parser.add_option("-p", "--path", dest="train_path",
                   help="Path to training data.")
 parser.add_option("--rp", "--record_path", dest="record_path",
-                  help="Path to the record path.", default='./models/records/record_voc.csv')
+                  help="Path to the record path.", default='./models/records/record_step2_copy.csv')
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
                   default="pascal_voc")
 parser.add_option("-n", "--num_rois", type="int", dest="num_rois",
                   help="Number of RoIs to process at once.", default=10)
 parser.add_option("--network", dest="network",
                   help="Base network to use. Supports vgg or resnet50.", default='vgg')
-parser.add_option("--hf", dest="horizontal_flips", help="Augment with horizontal flips in training. (Default=true).", action="store_false", default=True)
-parser.add_option("--vf", dest="vertical_flips", help="Augment with vertical flips in training. (Default=false).", action="store_true", default=False)
+parser.add_option("--hf", dest="horizontal_flips",
+                  help="Augment with horizontal flips in training. (Default=true).",default=True)
+parser.add_option("--vf", dest="vertical_flips",
+                  help="Augment with vertical flips in training. (Default=false).",default=False)
 parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degree rotations in training. (Default=false).",
-				  action="store_true", default=False)
+                  default=False)
 parser.add_option("--num_epochs", type="int", dest="num_epochs",
                   help="Number of epochs.", default=50)
 parser.add_option("--config_filename", dest="config_filename", help="Location to store all the metadata related to the training (to be used when testing).",
@@ -83,22 +87,15 @@ else:
 C = config.Config()
 
 C.use_horizontal_flips = bool(options.horizontal_flips)
-print("Horizontal flips?")
-print(C.use_horizontal_flips)
-
 C.use_vertical_flips = bool(options.vertical_flips)
-print("Vertical flips? ")
-print(C.use_vertical_flips)
 C.rot_90 = bool(options.rot_90)
-print("Rotational? ")
-print(C.rot_90)
 
 # mkdir to save models. (for example if vgg is chosen, a folder name "vgg" will be created)
 if not os.path.isdir("models"):
     os.mkdir("models")
 if not os.path.isdir("models/"+options.network):
     os.mkdir(os.path.join("models", options.network))
-C.model_path = os.path.join("models", options.network, options.dataset+".hdf5")
+C.model_path = os.path.join("models", options.network, options.dataset+"_step2_copy_"+".hdf5")
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -125,8 +122,6 @@ else:
     print('Not a valid model')
     raise ValueError
 
-print(options.input_weight_path)
-print(options.load)
 # check if weight path was passed via command line
 if options.input_weight_path:
     C.base_net_weights = options.input_weight_path
@@ -181,25 +176,29 @@ img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
 
 # define the base network (resnet here, can be VGG, Inception, etc)
-shared_layers = nn.nn_base(img_input, trainable=True)
+shared_layers1 = nn.nn_base(img_input, trainable=False)
+shared_layers2 = nn.nn_base(img_input, trainable=True)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
-rpn = nn.rpn(shared_layers, num_anchors)
+rpn1 = nn.rpn(shared_layers1, num_anchors,trainable=False) #fixed rpn layer 
+rpn2 = nn.rpn(shared_layers2, num_anchors,trainable=False) #new rpn layer  
 
-classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
+classifier = nn.classifier(shared_layers2, roi_input, C.num_rois, nb_classes=len(
     classes_count), trainable=True)
 
-model_rpn = Model(img_input, rpn[:2])
+model_rpn1 = Model(img_input, rpn1[:2]) #first rpn network for generating proposals
+model_rpn2 = Model(img_input, rpn2[:2]) #second rpn network for the new model 
 model_classifier = Model([img_input, roi_input], classifier)
 
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
-model_all = Model([img_input, roi_input], rpn[:2] + classifier)
+model_all = Model([img_input, roi_input], rpn2[:2] + classifier)
 
 # load pretrained weights (maybe be overridden later)
 try:
     print('loading weights from {}'.format(C.base_net_weights))
-    model_rpn.load_weights(C.base_net_weights, by_name=True)
+    model_rpn1.load_weights(C.base_net_weights, by_name=True)
+    model_rpn2.load_weights(C.base_net_weights, by_name=True) 
     model_classifier.load_weights(C.base_net_weights, by_name=True)
 except:
     print('Could not load pretrained model weights. Weights can be found in the keras application folder \
@@ -222,14 +221,15 @@ else:
 # may use this to resume from rpn models or previous training. specify either rpn or frcnn model to load
 if options.load is not None:  # with pretrained FRCNN model
     print("loading previous model from ", options.load)
-    model_rpn.load_weights(options.load, by_name=True)
+    model_rpn1.load_weights(options.load, by_name=True)
+    model_rpn2.load_weights(options.load, by_name=True)
     model_classifier.load_weights(options.load, by_name=True)
     # load the records
     record_df = pd.read_csv(C.record_path)
     r_mean_overlapping_bboxes = record_df['mean_overlapping_bboxes']
     r_class_acc = record_df['class_acc']
-    r_loss_rpn_cls = record_df['loss_rpn_cls']
-    r_loss_rpn_regr = record_df['loss_rpn_regr']
+    # r_loss_rpn_cls = record_df['loss_rpn_cls']
+    # r_loss_rpn_regr = record_df['loss_rpn_regr']
     r_loss_class_cls = record_df['loss_class_cls']
     r_loss_class_regr = record_df['loss_class_regr']
     r_curr_loss = record_df['curr_loss']
@@ -242,21 +242,40 @@ if options.load is not None:  # with pretrained FRCNN model
     #                                   'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
 elif options.rpn_weight_path is not None:  # with pretrained RPN
     print("loading RPN weights from ", options.rpn_weight_path)
-    model_rpn.load_weights(options.rpn_weight_path, by_name=True)
-    record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
-                                      'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
+    model_rpn1.load_weights(options.rpn_weight_path, by_name=True)
+    model_rpn2.load_weights(options.rpn_weight_path, by_name=True)
+    
+    record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 
+                                      'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
 else:
     print("no previous model was loaded")
     # Create the record.csv file to record losses, acc and mAP
-    record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
-                                      'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
+    record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 
+                                      'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
+
+#load the base weight again (to overwrite?)
+# load pretrained weights (maybe be overridden later)
+try:
+    print('loading weights from {}'.format(C.base_net_weights))
+    model_rpn2.load_weights(C.base_net_weights, by_name=True)
+    #model_classifier.load_weights(C.base_net_weights, by_name=True)
+except:
+    print('Could not load pretrained model weights. Weights can be found in the keras application folder \
+        https://github.com/fchollet/keras/tree/master/keras/applications')
 
 # compile the model AFTER loading weights!
-model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
+model_rpn1.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
+    num_anchors), losses.rpn_loss_regr(num_anchors)])
+model_rpn2.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
     num_anchors), losses.rpn_loss_regr(num_anchors)])
 model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
     len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
+
+
+#print out model information 
+model_classifier.summary()
+model_all.summary()
 
 # training settings
 
@@ -268,7 +287,7 @@ iter_num = 0
 # if(len(record_df) > 0):  # resume training from previous epoch
 #     num_epochs -= len(record_df)
 
-losses = np.zeros((epoch_length, 5))
+losses = np.zeros((epoch_length, 3))
 rpn_accuracy_rpn_monitor = []
 rpn_accuracy_for_epoch = []
 start_time = time.time()
@@ -293,11 +312,8 @@ for epoch_num in range(starting_epoch, num_epochs):
 
     # first 3 epoch is warmup
     if epoch_num < 3 and options.rpn_weight_path is not None:
-        K.set_value(model_rpn.optimizer.lr, options.lr/30)
+        K.set_value(model_rpn2.optimizer.lr, options.lr/30)
         K.set_value(model_classifier.optimizer.lr, options.lr/3)
-    #print out the learning rate each epoch for debugging purposes 
-    print("rpn learning rate: ",K.eval(model_rpn.optimizer.lr))
-    print("classifier learning rate: ",K.eval(model_classifier.optimizer.lr))
 
     while True:
         try:
@@ -312,9 +328,8 @@ for epoch_num in range(starting_epoch, num_epochs):
                         'RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
             X, Y, img_data = next(data_gen_train)
 
-            loss_rpn = model_rpn.train_on_batch(X, Y)
-
-            P_rpn = model_rpn.predict_on_batch(X)
+        
+            P_rpn = model_rpn1.predict_on_batch(X) #predict rois 
             R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, K.image_dim_ordering( #could try out different overlap_threshold
             ), use_regr=True, overlap_thresh=0.8, max_boxes=300)
             # note: calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
@@ -370,26 +385,25 @@ for epoch_num in range(starting_epoch, num_epochs):
             loss_class = model_classifier.train_on_batch(
                 [X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 
-            losses[iter_num, 0] = loss_rpn[1]
-            losses[iter_num, 1] = loss_rpn[2]
+            
 
-            losses[iter_num, 2] = loss_class[1]
-            losses[iter_num, 3] = loss_class[2]
-            losses[iter_num, 4] = loss_class[3]
+            losses[iter_num, 0] = loss_class[1]
+            losses[iter_num, 1] = loss_class[2]
+            losses[iter_num, 2] = loss_class[3]
 
             iter_num += 1
 
-            progbar.update(iter_num, [('rpn_cls', np.mean(losses[:iter_num, 0])), ('rpn_regr', np.mean(losses[:iter_num, 1])),
-                                      ('detector_cls', np.mean(losses[:iter_num, 2])), ('detector_regr', np.mean(
-                                          losses[:iter_num, 3])),
+            progbar.update(iter_num, [ 
+                                      ('detector_cls', np.mean(losses[:iter_num, 0])), ('detector_regr', np.mean(
+                                          losses[:iter_num, 1])),
                                       ("average number of objects", len(selected_pos_samples))])
 
             if iter_num == epoch_length: #at the end of every epoch 
-                loss_rpn_cls = np.mean(losses[:, 0])
-                loss_rpn_regr = np.mean(losses[:, 1])
-                loss_class_cls = np.mean(losses[:, 2])
-                loss_class_regr = np.mean(losses[:, 3])
-                class_acc = np.mean(losses[:, 4])
+            
+                
+                loss_class_cls = np.mean(losses[:, 0])
+                loss_class_regr = np.mean(losses[:, 1])
+                class_acc = np.mean(losses[:, 2])
 
                 mean_overlapping_bboxes = float(
                     sum(rpn_accuracy_for_epoch)) / len(rpn_accuracy_for_epoch)
@@ -400,14 +414,12 @@ for epoch_num in range(starting_epoch, num_epochs):
                         mean_overlapping_bboxes))
                     print(
                         'Classifier accuracy for bounding boxes from RPN: {}'.format(class_acc))
-                    print('Loss RPN classifier: {}'.format(loss_rpn_cls))
-                    print('Loss RPN regression: {}'.format(loss_rpn_regr))
                     print('Loss Detector classifier: {}'.format(loss_class_cls))
                     print('Loss Detector regression: {}'.format(loss_class_regr))
                     print('Elapsed time: {}'.format(time.time() - start_time))
                     elapsed_time = (time.time()-start_time)/60
 
-                curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
+                curr_loss = loss_class_cls + loss_class_regr
                 iter_num = 0
                 start_time = time.time()
 
@@ -417,8 +429,8 @@ for epoch_num in range(starting_epoch, num_epochs):
                             best_loss, curr_loss))
                     best_loss = curr_loss
                     model_all.save_weights(C.model_path)
-                new_row = {'mean_overlapping_bboxes': round(mean_overlapping_bboxes, 3), 'class_acc': round(class_acc, 3), 'loss_rpn_cls': round(loss_rpn_cls, 3), 'loss_rpn_regr': round(
-                    loss_rpn_regr, 3), 'loss_class_cls': round(loss_class_cls, 3), 'loss_class_regr': round(loss_class_regr, 3), 'curr_loss': round(curr_loss, 3), 'elapsed_time': round(elapsed_time, 3), 'mAP': 0}
+                new_row = {'mean_overlapping_bboxes': round(mean_overlapping_bboxes, 3), 'class_acc': round(class_acc, 3),
+                 'loss_class_cls': round(loss_class_cls, 3), 'loss_class_regr': round(loss_class_regr, 3), 'curr_loss': round(curr_loss, 3), 'elapsed_time': round(elapsed_time, 3), 'mAP': 0}
                 record_df = record_df.append(
                     new_row, ignore_index=True)
                 record_df.to_csv(C.record_path, index=0)

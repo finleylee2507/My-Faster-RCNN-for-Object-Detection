@@ -32,7 +32,7 @@ parser = OptionParser()
 parser.add_option("-p", "--path", dest="train_path",
                   help="Path to training data.")
 parser.add_option("--rp", "--record_path", dest="record_path",
-                  help="Path to the record path.", default='./models/records/record_voc.csv')
+                  help="Path to the record path.", default='./models/records/record_voc_fine_tune.csv')
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
                   default="pascal_voc")
 parser.add_option("-n", "--num_rois", type="int", dest="num_rois",
@@ -98,7 +98,7 @@ if not os.path.isdir("models"):
     os.mkdir("models")
 if not os.path.isdir("models/"+options.network):
     os.mkdir(os.path.join("models", options.network))
-C.model_path = os.path.join("models", options.network, options.dataset+".hdf5")
+C.model_path = os.path.join("models", options.network, options.dataset+"_fine_tune"+".hdf5")
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -181,11 +181,11 @@ img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
 
 # define the base network (resnet here, can be VGG, Inception, etc)
-shared_layers = nn.nn_base(img_input, trainable=True)
+shared_layers = nn.nn_base(img_input, trainable=False)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
-rpn = nn.rpn(shared_layers, num_anchors)
+rpn = nn.rpn(shared_layers, num_anchors,trainable=True)
 
 classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
     classes_count), trainable=True)
@@ -258,6 +258,13 @@ model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss
     len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
 
+
+#print out model info 
+model_rpn.summary()
+model_classifier.summary()
+model_all.summary()
+
+
 # training settings
 
 
@@ -295,10 +302,10 @@ for epoch_num in range(starting_epoch, num_epochs):
     if epoch_num < 3 and options.rpn_weight_path is not None:
         K.set_value(model_rpn.optimizer.lr, options.lr/30)
         K.set_value(model_classifier.optimizer.lr, options.lr/3)
+        
     #print out the learning rate each epoch for debugging purposes 
     print("rpn learning rate: ",K.eval(model_rpn.optimizer.lr))
     print("classifier learning rate: ",K.eval(model_classifier.optimizer.lr))
-
     while True:
         try:
             if len(rpn_accuracy_rpn_monitor) == epoch_length and C.verbose:
@@ -432,3 +439,55 @@ for epoch_num in range(starting_epoch, num_epochs):
 print('Training complete, exiting.')
 
 
+# save the training infos as plots
+
+
+plt.figure(figsize=(15, 5))
+plt.subplot(1, 2, 1)
+plt.plot(np.arange(0, r_epochs), record_df['mean_overlapping_bboxes'], 'r')
+plt.title('mean_overlapping_bboxes')
+plt.subplot(1, 2, 2)
+plt.plot(np.arange(0, r_epochs), record_df['class_acc'], 'r')
+plt.title('class_acc')
+
+
+plt.figure(figsize=(15, 5))
+plt.subplot(1, 2, 1)
+plt.plot(np.arange(0, r_epochs), record_df['loss_rpn_cls'], 'r')
+plt.title('loss_rpn_cls')
+plt.subplot(1, 2, 2)
+plt.plot(np.arange(0, r_epochs), record_df['loss_rpn_regr'], 'r')
+plt.title('loss_rpn_regr')
+
+
+plt.figure(figsize=(15, 5))
+plt.subplot(1, 2, 1)
+plt.plot(np.arange(0, r_epochs), record_df['loss_class_cls'], 'r')
+plt.title('loss_class_cls')
+plt.subplot(1, 2, 2)
+plt.plot(np.arange(0, r_epochs), record_df['loss_class_regr'], 'r')
+plt.title('loss_class_regr')
+
+
+plt.plot(np.arange(0, r_epochs), record_df['curr_loss'], 'r')
+plt.title('total_loss')
+
+
+plt.figure(figsize=(15, 5))
+plt.subplot(1, 2, 1)
+plt.plot(np.arange(0, r_epochs), record_df['curr_loss'], 'r')
+plt.title('total_loss')
+plt.subplot(1, 2, 2)
+plt.plot(np.arange(0, r_epochs), record_df['elapsed_time'], 'r')
+plt.title('elapsed_time')
+
+
+plt.title('loss')
+plt.plot(np.arange(0, r_epochs), record_df['loss_rpn_cls'], 'b')
+plt.plot(np.arange(0, r_epochs), record_df['loss_rpn_regr'], 'g')
+plt.plot(np.arange(0, r_epochs), record_df['loss_class_cls'], 'r')
+plt.plot(np.arange(0, r_epochs), record_df['loss_class_regr'], 'c')
+# plt.plot(np.arange(0, r_epochs), record_df['curr_loss'], 'm')
+
+
+plt.savefig('plot.png')
