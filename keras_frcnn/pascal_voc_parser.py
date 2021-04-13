@@ -1,21 +1,26 @@
-import os
+import os 
 import cv2
 import xml.etree.ElementTree as ET
 import numpy as np
 
 
-def get_data(input_path, cat=None):
+def get_data(input_path, C, cat=None):
     all_imgs = []
 
     classes_count = {}
 
-    class_mapping = {}
+    if(len(C.class_mapping)!=0):
+        class_mapping=C.class_mapping
+    else:
+        class_mapping = {}
+
+    
 
     visualise = False
 
     # add VOC2012 if using.
-    # data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
-    data_paths = [os.path.join(input_path,s) for s in ['VOC2007', 'VOC2012']]
+    data_paths = [os.path.join(input_path, s) for s in ['VOC2012']]
+    #data_paths = [os.path.join(input_path,s) for s in ['VOC2007', 'VOC2012']]
     print("data path:", data_paths)
 
     print('Parsing annotation files')

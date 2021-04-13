@@ -13,6 +13,12 @@ class Config:
 		self.use_horizontal_flips = False
 		self.use_vertical_flips = False
 		self.rot_90 = False
+		self.noise=False
+		self.blur=False
+		self.brightness=False 
+
+		#counting the number of augmentation options 
+		self.list=[]
 
 		# anchor box scales
 		self.anchor_box_scales = [128, 256, 512]

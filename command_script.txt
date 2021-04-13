@@ -1,0 +1,3 @@
+python train_frcnn.py -p ./VOCdevkit/ --lr 1e-4 --opt SGD --network vgg --elen 1000 --num_epoch 100 --load models/vgg/voc.hdf5  (with existing model)
+python train_frcnn.py -p ./VOCdevkit/ --lr 1e-4 --opt SGD --network vgg --elen 1000 --num_epoch 100 --rpn models/rpn/voc.hdf5 (with pretrained rpn)
+python test_frcnn.py -p ./test_images --network vgg --load models/vgg/voc.hdf5 --write 
