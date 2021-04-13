@@ -1,22 +1,5 @@
 ![image](https://github.com/kentaroy47/frcnn-from-scratch-with-keras/blob/master/images/85.png)
-# What is this repo?
-- **Simple faster-RCNN codes in Keras!**
 
-- **RPN (region proposal layer) can be trained separately!**
-
-- **Active support! :)**
-
-- **MobileNetv1 & v2 support!**
-
-- **VGG support!**
-
-- added eval for pascal_voc :)
-
-Stars and forks are appreciated if this repo helps your project, will motivate me to support this repo. 
-
-PR and issues will help too!
-
-Thanks :)
 
 ## Frameworks
 Tested with Tensorflow==1.12.0 and Keras 2.2.4.
@@ -33,20 +16,8 @@ Nice kernel by kishor1210
 2. VGG19 support added.
 3. RPN can be trained seperately.
 
-## Pytorch object detectors
-https://github.com/kentaroy47/ObjectDetection.Pytorch
-
-Here are my object detection models in Pytorch.
-The model is SSD and trains quite fast.
-
 ### trained model
-vgg16
-
-https://drive.google.com/file/d/1IgxPP0aI5pxyPHVSM2ZJjN1p9dtE4_64/view?usp=sharing
-
-config.pickle:
-
-https://drive.google.com/open?id=1BL_2ZgTf55vH2q1jvVz0hkhlWYgj-coa
+N/A 
 
 # Running scripts..
 
@@ -67,32 +38,8 @@ Using imagenet pretrained VGG16 weights will significantly speed up training.
 
 Download and place it in the root directory.
 
-You can choose other base models as well.
 
-```
-# place weights in pretrain dir.
-mkdir pretrain & mv pretrain
-
-# download models you would like to use.
-# for VGG16
-wget https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-
-# for mobilenetv1
-wget https://github.com/fchollet/deep-learning-models/releases/download/v0.6/mobilenet_1_0_224_tf.h5
-
-# for mobilenetv2
-wget https://github.com/JonathanCMitchell/mobilenet_v2_keras/releases/download/v1.1/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_224.h5
-
-# for resnet 50
-wget https://github.com/fchollet/deep-learning-models/releases/download/v0.1/resnet50_weights_tf_dim_ordering_tf_kernels.h5
-```
-
-Other tensorflow pretrained models are in bellow.
-
-https://github.com/fchollet/deep-learning-models/releases/
-
-
-## 3. lets train region proposal network first, rather than training the whole network.
+## 3. Let's train the region proposal network first, rather than training the whole network.
 Training the entire faster-rcnn is quite difficult, but RPN itself can be more handy!
 
 You can see if the loss converges.. etc
