@@ -19,7 +19,8 @@ def get_data(input_path, C, cat=None):
     visualise = False
 
     # add VOC2012 if using.
-    data_paths = [os.path.join(input_path, s) for s in ['VOC2012']]
+    data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
+    #data_paths = [os.path.join(input_path, s) for s in ['VOC2012']]
     #data_paths = [os.path.join(input_path,s) for s in ['VOC2007', 'VOC2012']]
     print("data path:", data_paths)
 
