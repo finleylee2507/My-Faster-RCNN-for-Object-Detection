@@ -11,9 +11,6 @@ Tested with Tensorflow==1.12.0 and Keras 2.2.4.
 3. RPN can be trained seperately.
 4. Fixed a couple bugs in the original repo so now the user can resume training normally. 
 
-### trained model
-N/A 
-
 # Running scripts..
 
 ## 1. clone the repo
