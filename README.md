@@ -4,12 +4,6 @@
 ## Frameworks
 Tested with Tensorflow==1.12.0 and Keras 2.2.4.
 
-## Kaggle Notebook examples
-* Global Wheat Detection
-
-[train-faster-rcnn-using-keras](https://www.kaggle.com/kishor1210/train-faster-rcnn-using-keras)
-
-Nice kernel by kishor1210
 
 ## Compared to the forked keras-frcnn..
 1. mobilenetv1 and mobilenetv2 supported. Can also try Mobilenetv1_05,Mobilenetv1_25 for smaller nets on the Edge.
@@ -62,9 +56,7 @@ Epoch 4/20
 ```
 
 ## 4. then train the whole Faster-RCNN network!
-I recommend using the pretrained RPN model, which will stablize training.
-You can download the rpn model (VGG16) from here:
-https://drive.google.com/file/d/1IgxPP0aI5pxyPHVSM2ZJjN1p9dtE4_64/view?usp=sharing
+
 
 ```
 # sample command
