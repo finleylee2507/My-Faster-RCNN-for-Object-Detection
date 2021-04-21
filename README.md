@@ -15,6 +15,7 @@ Nice kernel by kishor1210
 1. mobilenetv1 and mobilenetv2 supported. Can also try Mobilenetv1_05,Mobilenetv1_25 for smaller nets on the Edge.
 2. VGG19 support added.
 3. RPN can be trained seperately.
+4. Fixed a couple bugs in the original repo so now the user can resume training normally. 
 
 ### trained model
 N/A 
