@@ -53,3 +53,8 @@ def class_loss_regr(num_classes):
 
 def class_loss_cls(y_true, y_pred):
 	return lambda_cls_class * K.mean(categorical_crossentropy(y_true[0, :, :], y_pred[0, :, :]))
+
+#the loss function used for training the occlusion network 
+def loss_occlusion(y_true,y_pred):	
+  bce = tf.keras.losses.BinaryCrossentropy(reduction='sum_over_batch_size')
+  return bce(y_true,y_pred)

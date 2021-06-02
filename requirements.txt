@@ -3,3 +3,5 @@ Keras==2.2.4
 numpy
 opencv-python
 sklearn
+imgaug
+scikit-image

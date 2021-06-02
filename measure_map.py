@@ -6,7 +6,7 @@ import pickle
 from optparse import OptionParser
 import time
 from keras_frcnn import config
-import keras_frcnn.resnet as nn #change this to whatever network you're using 
+import keras_frcnn.vgg as nn #change this to whatever network you're using 
 from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
@@ -153,10 +153,10 @@ C.num_rois = int(options.num_rois)
 
 if K.image_dim_ordering() == 'th':
 	input_shape_img = (3, None, None)
-	input_shape_features = (1024, None, None) #change the number of features according to what network you're using. For example, resnet is 1024
+	input_shape_features = (512, None, None) #change the number of features according to what network you're using. For example, resnet is 1024
 else:
 	input_shape_img = (None, None, 3)
-	input_shape_features = (None, None, 1024)
+	input_shape_features = (None, None, 512)
 
 
 img_input = Input(shape=input_shape_img)
@@ -193,7 +193,7 @@ else:
 model_rpn.compile(optimizer='sgd', loss='mse')
 model_classifier.compile(optimizer='sgd', loss='mse')
 
-all_imgs, _, _ = get_data(options.test_path)
+all_imgs, _, _ = get_data(options.test_path,C)
 test_imgs = [s for s in all_imgs if s['imageset'] == 'test']
 
 
