@@ -18,10 +18,11 @@ from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from matplotlib import pyplot as plt 
-
+from keras_frcnn import vgg_occlusion_net as occlusion
 if 'tensorflow' == K.backend():
 	import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
+from keras_frcnn import thresholding_helper
 config2 = tf.ConfigProto()
 config2.gpu_options.allow_growth = True
 set_session(tf.Session(config=config2))
@@ -33,7 +34,7 @@ parser = OptionParser()
 parser.add_option("-p", "--path", dest="train_path",
 				  help="Path to training data.")
 parser.add_option("--rp", "--record_path", dest="record_path",
-				  help="Path to the record path.", default='./models/records/record_voc_experiment.csv')
+				  help="Path to the record path.", default='./models/records/record_vgg_voc_with_occlusion.csv')
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
 				  default="pascal_voc")
 parser.add_option("-n", "--num_rois", type="int", dest="num_rois",
@@ -47,7 +48,7 @@ parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degr
 parser.add_option("--num_epochs", type="int", dest="num_epochs",
 				  help="Number of epochs.", default=50)
 parser.add_option("--config_filename", dest="config_filename", help="Location to store all the metadata related to the training (to be used when testing).",
-				  default="config.pickle")
+				  default="config_with_occlusion.pickle")
 parser.add_option("--output_weight_path", dest="output_weight_path",
 				  help="Output path for weights.", default='./model_frcnn.hdf5')
 parser.add_option("--input_weight_path", dest="input_weight_path",
@@ -67,6 +68,17 @@ parser.add_option("--cat", dest="cat",
 parser.add_option("--lr", dest="lr", help="learn rate",
 				  type=float, default=1e-3)
 
+####IMPORTANT NEW STUFFS 
+#Path to the occlusion net model  
+parser.add_option("--input_weight_path_occlusion", dest="input_weight_path_occlusion",
+				  help="Input path for weights (occlusion net). If not specified, will try to load default weights provided by keras.", default=None)
+
+#Whether to use occlusion augmentation or not 
+parser.add_option("--isOcclude", dest="isOcclude",
+				  help="Whether to apply occlusion augmentation to training images or not. If not, execute the normal faster-rcnn training", action="store_true", default=False)
+parser.add_option("--thresholding", dest="thresholding",
+				  help="What type of thresholding to apply for the occlusion net output. Choose from direct, sampling or random", default='direct')
+
 (options, args) = parser.parse_args()
 
 if not options.train_path:   # if filename is not given
@@ -82,7 +94,8 @@ else:
 
 # pass the settings from the command line, and persist them in the config object
 
-
+if(bool(options.isOcclude)):
+	print("Applying occlusion net augmentation.")
 
 config_output_filename = options.config_filename
 
@@ -92,6 +105,7 @@ if os.path.exists(config_output_filename):
 	with open(config_output_filename, 'rb') as f_in:
 		C = pickle.load(f_in)
 else:
+	print("Can't find previous config file. Initializing a new one.")
 	C = config.Config()
 	C.class_mapping={}
 
@@ -99,22 +113,22 @@ else:
 
 
 C.use_horizontal_flips = bool(options.horizontal_flips)
-print("Horizontal flips?")
-print(C.use_horizontal_flips)
+print("Horizontal flips: ",C.use_horizontal_flips)
+
 
 C.use_vertical_flips = bool(options.vertical_flips)
-print("Vertical flips? ")
-print(C.use_vertical_flips)
+print("Vertical flips: ",C.use_vertical_flips)
+
 C.rot_90 = bool(options.rot_90)
-print("Rotational? ")
-print(C.rot_90)
+print("Rotational: ", C.rot_90)
+
 
 # mkdir to save models. (for example if vgg is chosen, a folder name "vgg" will be created)
 if not os.path.isdir("models"):
 	os.mkdir("models")
 if not os.path.isdir("models/"+options.network):
 	os.mkdir(os.path.join("models", options.network))
-C.model_path = os.path.join("models", options.network, options.dataset+"_experiment_"+".hdf5")
+C.model_path = os.path.join("models", options.network, options.dataset+"_with_occlusion"+".hdf5")
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -141,8 +155,8 @@ else:
 	print('Not a valid model')
 	raise ValueError
 
-print(options.input_weight_path)
-print(options.load)
+print("Input rcnn weight path",options.input_weight_path)
+print("Loading: ",options.load)
 # check if weight path was passed via command line
 if options.input_weight_path:
 	C.base_net_weights = options.input_weight_path
@@ -164,9 +178,6 @@ else:
 	if 'bg' not in classes_count:
 		classes_count['bg'] = 0
 		C.class_mapping = class_mapping
-
-
-
 
 
 inv_map = {v: k for k, v in class_mapping.items()}
@@ -197,8 +208,8 @@ print('Num val samples {}'.format(len(val_imgs)))
 
 data_gen_train = data_generators.get_anchor_gt(
 	train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_val = data_generators.get_anchor_gt(
-	val_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
+# data_gen_val = data_generators.get_anchor_gt(
+# 	val_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
 
 if K.image_dim_ordering() == 'th':
 	input_shape_img = (3, None, None)
@@ -207,7 +218,7 @@ else:
 
 img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
-new_classifier_part2_input=Input(shape=(1, 7, 7, 512)) #experimenting with num_rois=1
+new_classifier_part2_input=Input(shape=(C.num_rois, 7, 7, 512)) #experimenting with num_rois=1
 # define the base network (resnet here, can be VGG, Inception, etc)
 shared_layers = nn.nn_base(img_input, trainable=True)
 
@@ -215,15 +226,17 @@ shared_layers = nn.nn_base(img_input, trainable=True)
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
 rpn = nn.rpn(shared_layers, num_anchors)
 
-# classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
-# 	classes_count), trainable=True)
+
 
 new_classifier_part1=nn.new_classifier_part1(shared_layers, roi_input, C.num_rois)
 
 new_classifier_part2=nn.new_classifier_part2(new_classifier_part2_input,nb_classes=len(classes_count))
 
 model_rpn = Model(img_input, rpn[:2])
-#model_classifier = Model([img_input, roi_input], classifier)
+
+# the occlusion net model
+model_occlusion_net = occlusion.OcclusionNet(
+	input_height=7, input_width=7, input_channel=512)
 
 #the new stuffs 
 model_pooling=Model([img_input,roi_input],new_classifier_part1) 
@@ -277,9 +290,6 @@ if options.load is not None:  # with pretrained FRCNN model
 	r_mAP = record_df['mAP']
 	print('Already train %dK batches' % (len(record_df)))
 
-	# Create the record.csv file to record losses, acc and mAP (for first time training on an existing model, delete if resume)
-	# record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
-	#                                   'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
 elif options.rpn_weight_path is not None:  # with pretrained RPN
 	print("loading RPN weights from ", options.rpn_weight_path)
 	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
@@ -291,26 +301,26 @@ else:
 	record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
 									  'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
 
+#Load the occlusion net weight
+if options.input_weight_path_occlusion is not None:
+	print("loading occlusion model from ", options.input_weight_path_occlusion)
+	model_occlusion_net.load_weights(options.input_weight_path_occlusion, by_name=True)
+
 # compile the model AFTER loading weights!
 model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
 	num_anchors), losses.rpn_loss_regr(num_anchors)])
-# model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
-# 	len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 
 #the new network 
 model_pooling.compile(optimizer='sgd',loss='mae') #compile with random parameters 
 model_new_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
 	len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 
-#model_all.compile(optimizer='sgd', loss='mae')
-
-#the new network 
 model_all_new.compile(optimizer='sgd', loss='mae')
+model_occlusion_net.compile(optimizer='sgd',loss='mae')
 
-
-#model_all.summary()
 model_pooling.summary()
 model_all_new.summary()
+model_occlusion_net.summary()
 # training settings
 
 
@@ -318,8 +328,6 @@ epoch_length = int(options.epoch_length)
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
-# if(len(record_df) > 0):  # resume training from previous epoch
-#     num_epochs -= len(record_df)
 
 losses = np.zeros((epoch_length, 5))
 rpn_accuracy_rpn_monitor = []
@@ -347,12 +355,10 @@ for epoch_num in range(starting_epoch, num_epochs):
 	# first 3 epoch is warmup
 	if epoch_num < 3 and options.rpn_weight_path is not None:
 		K.set_value(model_rpn.optimizer.lr, options.lr/30)
-		#K.set_value(model_classifier.optimizer.lr, options.lr/3)
 		K.set_value(model_new_classifier.optimizer.lr, options.lr/3)
 
 	#print out the learning rate each epoch for debugging purposes 
 	print("rpn learning rate: ",K.eval(model_rpn.optimizer.lr))
-	#print("classifier learning rate: ",K.eval(model_classifier.optimizer.lr))
 	print("classifier learning rate: ",K.eval(model_new_classifier.optimizer.lr))
 
 	while True:
@@ -423,101 +429,27 @@ for epoch_num in range(starting_epoch, num_epochs):
 				else:
 					sel_samples = random.choice(pos_samples)
 
-###############For testing/experimenting purpose only 
-			# print(sel_samples)
-			# print(X2[:, sel_samples, :].shape)
-			# print(Y1[:, sel_samples, :].shape)
-			# print(Y2[:, sel_samples, :].shape)
-			
-			# for sample in sel_samples:
-			# 	print(sample)
-			# 	test1=X2[:, sample, :]
-			# 	test2=Y1[:, sample, :]
-			# 	test3=Y2[:, sample, :] 
 
-			# 	test1=np.repeat(test1,10,axis=0)
-			# 	test2=np.repeat(test2,10,axis=0)
-			# 	test3=np.repeat(test3,10,axis=0)
-
-			# 	test1=np.expand_dims(test1,axis=0)
-			# 	test2=np.expand_dims(test2,axis=0) 
-			# 	test3=np.expand_dims(test3,axis=0) 
-
-			# 	print(test1.shape)
-				
-			# 	test_loss=model_classifier.test_on_batch([X,test1],[test2,test3])
-			# 	print(test_loss)
-
-
-
-
-
-			# loss_class = model_classifier.test_on_batch(
-			# 	[X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
-				
-			# print("test loss",loss_class)
-
-
-
-			# loss_class = model_classifier.train_on_batch(
-			# 	[X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 
 			pooling_output=model_pooling.predict_on_batch([X, X2[:, sel_samples, :]])
-			print(pooling_output.shape)
+			#print(pooling_output.shape)
 			
-			#try iterating over the 10 rois 
+			###Perform occlusion augmentation (if enabled)
 
-			for i in range(0,10):
-				test1=pooling_output[:,i]
-				sel_sample=sel_samples[i]
-				test2=Y1[:, sel_sample, :] 
-				test3=Y2[:, sel_sample, :]
-				print(test1.shape)
-				
-				# print(sel_sample)
+			if(bool(options.isOcclude)):
+				for i in range(0,C.num_rois):
+					temp_sample=pooling_output[:,i]
+					occlusion_prediction=model_occlusion_net.predict_on_batch(temp_sample)
 
-				curr_min_loss=np.Inf 
-				#iterate over the x and y dimension of the roi and applying a 2 x 2 sliding window on it 
-				for j in range(0,6):
-					for k in range(0,6):
-						#print("j: ",j," k: ",k)
-						new_test1=np.copy(test1)
-						new_test2=np.copy(test2)
-						new_test3=np.copy(test3)
+					if(options.thresholding=='direct'): #apply direct thresolding 
+						pass 
+					if(options.thresholding=='sampling'): #applyg sampling thresholding 
+						processed_output=thresholding_helper.threshold_by_sampling(occlusion_prediction[0,:,:,0],1/2,1/3) #could tweak the parameters 
+						print(processed_output) 
+					if(options.thresholding=='random'): #apply random thresolding 
+						pass
+					
 
-						new_test1[0,j:j+2,k:k+2,:]=0 
-						#print(new_test1[0,:,:,0])
-
-						# #in order to match up the structure of the network 
-
-						# new_test1=np.repeat(new_test1,10,axis=0)
-						# new_test2=np.repeat(new_test2,10,axis=0)	
-						# new_test3=np.repeat(new_test3,10,axis=0)
-
-						new_test1=np.expand_dims(new_test1,axis=0)
-						new_test2=np.expand_dims(new_test2,axis=0) 
-						new_test3=np.expand_dims(new_test3,axis=0) 
-
-						test_loss=model_new_classifier.test_on_batch(new_test1,[new_test2, new_test3])
-						test_classfication_loss=test_loss[1]
-						print("Test loss, ROI :", i, " loss: ",test_loss)
-
-			print("Finished!")
-
-
-
-
-                #in order to match up the structure of the network 
-				# test1=np.repeat(test1,10,axis=0)
-				# test2=np.repeat(test2,10,axis=0)	
-				# test3=np.repeat(test3,10,axis=0)
-
-				# test1=np.expand_dims(test1,axis=0)
-				# test2=np.expand_dims(test2,axis=0) 
-				# test3=np.expand_dims(test3,axis=0) 
-
-				# roi_loss=model_new_classifier.test_on_batch(test1,[test2, test3])
-				# print("Roi loss: ",roi_loss)
 
 			# loss_class=model_new_classifier.train_on_batch(pooling_output,[Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 

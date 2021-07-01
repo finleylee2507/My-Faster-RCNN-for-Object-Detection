@@ -275,7 +275,7 @@ def threadsafe_generator(f):
 		return threadsafe_iter(f(*a, **kw))
 	return g
 
-def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backend, mode='train'):
+def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backend, mode='train',debug=False):
 
 	# The following line is not useful with Python 3.5, it is kept for the legacy
 	# all_img_data = sorted(all_img_data)
@@ -308,11 +308,11 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 				# get image dimensions for resizing
 				(resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
 
-				# resize the image so that smalles side is length = 600px
+				# resize the image so that smallest side is length = 600px
 				x_img = cv2.resize(x_img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
 				
 				#save an image for debuggin purpose 
-				#debug_img=x_img.copy() #COMMENT OUT LATER 
+				debug_img=x_img.copy() #COMMENT OUT LATER 
 
 				try:
 					y_rpn_cls, y_rpn_regr = calc_rpn(C, img_data_aug, width, height, resized_width, resized_height, img_length_calc_function)
@@ -338,7 +338,11 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 					y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
 					y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
 
-				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug #DELETE debug_img later !!! 
+				if(not debug):
+					yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug 
+				else:
+					yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug , debug_img
+
 
 			except Exception as e:
 				print(e)

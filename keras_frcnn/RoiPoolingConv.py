@@ -49,7 +49,7 @@ class RoiPoolingConv(Layer):
     def call(self, x, mask=None):
 
         assert(len(x) == 2)
-
+        #get the img feature map and rois boxes from the input 
         img = x[0]
         rois = x[1]
 
@@ -107,6 +107,7 @@ class RoiPoolingConv(Layer):
 
         final_output = K.concatenate(outputs, axis=0)
         final_output = K.reshape(final_output, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
+  
 
         if self.dim_ordering == 'th':
             final_output = K.permute_dimensions(final_output, (0, 1, 4, 2, 3))

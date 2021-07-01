@@ -264,9 +264,7 @@ if options.load is not None:  # with pretrained FRCNN model
 	r_mAP = record_df['mAP']
 	print('Already train %dK batches' % (len(record_df)))
 
-	# Create the record.csv file to record losses, acc and mAP (for first time training on an existing model, delete if resume)
-	# record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
-	#                                   'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
+	
 elif options.rpn_weight_path is not None:  # with pretrained RPN
 	print("loading RPN weights from ", options.rpn_weight_path)
 	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
@@ -338,7 +336,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 				if mean_overlapping_bboxes == 0:
 					print(
 						'RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
-			X, Y, img_data = next(data_gen_train)
+			X, Y, img_data = next(data_gen_train) #Note: X=resized img, Y=[np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data=object containing img info 
 
 			loss_rpn = model_rpn.train_on_batch(X, Y)
 
@@ -396,7 +394,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 					sel_samples = random.choice(pos_samples)
 
 			loss_class = model_classifier.train_on_batch(
-				[X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+				[X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]]) #note: X=base layers, X2=input rois 
 
 			losses[iter_num, 0] = loss_rpn[1]
 			losses[iter_num, 1] = loss_rpn[2]

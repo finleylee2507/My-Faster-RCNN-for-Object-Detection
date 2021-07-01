@@ -16,7 +16,8 @@ from keras.engine.topology import get_source_inputs
 from keras.utils import layer_utils
 from keras.utils.data_utils import get_file
 from keras import backend as K
-from keras_frcnn.RoiPoolingConv import RoiPoolingConv
+from keras_frcnn.RoiPoolingConv import RoiPoolingConv 
+from keras_frcnn.RoiPoolingConvCoordinates import RoiPoolingConvCoordinates
 
 
 def get_weight_path():
@@ -103,9 +104,12 @@ def classifier(base_layers, input_rois, num_rois, nb_classes = 21, trainable=Fal
 	if K.backend() == 'tensorflow':
 		pooling_regions = 7
 		input_shape = (num_rois,7,7,512)
+		# input_shape = (None,7,7,512)
+		
 	elif K.backend() == 'theano':
 		pooling_regions = 7
 		input_shape = (num_rois,512,7,7)
+		# input_shape = (None,512,7,7)
 
 	out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
 
@@ -125,12 +129,29 @@ def new_classifier_part1(base_layers, input_rois, num_rois):
 
 	if K.backend() == 'tensorflow':
 		pooling_regions = 7
-		input_shape = (num_rois,7,7,512)
+		#input_shape = (num_rois,7,7,512)
+		input_shape = (None,7,7,512)		
 	elif K.backend() == 'theano':
 		pooling_regions = 7
-		input_shape = (num_rois,512,7,7)
+		#input_shape = (num_rois,512,7,7)
+		input_shape = (None,512,7,7)
 
-	out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
+	out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois]) 
+	return out_roi_pool 
+
+#returns the bounding box coordinates of the ROIs 
+def new_classifier_part1_coordinates(base_layers, input_rois, num_rois):
+
+	if K.backend() == 'tensorflow':
+		pooling_regions = 7
+		#input_shape = (num_rois,7,7,512)
+		input_shape = (None,7,7,512)		
+	elif K.backend() == 'theano':
+		pooling_regions = 7
+		#input_shape = (num_rois,512,7,7)
+		input_shape = (None,512,7,7)
+
+	out_roi_pool = RoiPoolingConvCoordinates(pooling_regions, num_rois)([base_layers, input_rois]) 
 	return out_roi_pool 
 
 def new_classifier_part2(out_roi_pool,nb_classes=21):
