@@ -432,83 +432,110 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 
 			pooling_output=model_pooling.predict_on_batch([X, X2[:, sel_samples, :]])
-			#print(pooling_output.shape)
+			print(pooling_output.shape)
 			
 			###Perform occlusion augmentation (if enabled)
-
+			pooling_output_copy=np.copy(pooling_output) #make a copy of the pooling layer output to be further processed/or leave it as it is  
 			if(bool(options.isOcclude)):
-				for i in range(0,C.num_rois):
-					temp_sample=pooling_output[:,i]
+
+
+				for i in range(0,C.num_rois): #iterate over all the ROIs 
+					temp_sample=pooling_output_copy[:,i]
 					occlusion_prediction=model_occlusion_net.predict_on_batch(temp_sample)
 
+					#apply occlusion on the pooling layer output according to the selected policy 
 					if(options.thresholding=='direct'): #apply direct thresolding 
-						pass 
-					if(options.thresholding=='sampling'): #applyg sampling thresholding 
+						for row in range(occlusion_prediction.shape[0]):
+							for col in range(occlusion_prediction.shape[1]):
+								if (occlusion_prediction[0,row,col,0]>=0.5): #drop out 
+									pooling_output_copy[0,i,row,col,:]=0 
+			
+
+
+					if(options.thresholding=='sampling'): #apply sampling thresholding 
 						processed_output=thresholding_helper.threshold_by_sampling(occlusion_prediction[0,:,:,0],1/2,1/3) #could tweak the parameters 
-						print(processed_output) 
+						# print(processed_output) 
+
+						for row in range(0,processed_output.shape[0]):
+							for col in range(0,processed_output.shape[1]):
+				
+								if(processed_output[row,col]==1):
+									pooling_output_copy[0,i,row,col,:]=0 #drop out all channels in the corresponding spatial location 
+									
+								
+
+
 					if(options.thresholding=='random'): #apply random thresolding 
-						pass
+						processed_output=thresholding_helper.random_thresholding(occlusion_prediction[0,:,:,0],0.3) #could tweak the parameters 
+
+						for row in range(0,processed_output.shape[0]):
+							for col in range(0,processed_output.shape[1]):
+				
+								if(processed_output[row,col]==1):
+									pooling_output_copy[0,i,row,col,:]=0 #drop out all channels in the corresponding spatial location 
+															
+
 					
 
 
-			# loss_class=model_new_classifier.train_on_batch(pooling_output,[Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+			loss_class=model_new_classifier.train_on_batch(pooling_output_copy,[Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 
 
-			# losses[iter_num, 0] = loss_rpn[1]
-			# losses[iter_num, 1] = loss_rpn[2]
+			losses[iter_num, 0] = loss_rpn[1]
+			losses[iter_num, 1] = loss_rpn[2]
 
-			# losses[iter_num, 2] = loss_class[1]
-			# losses[iter_num, 3] = loss_class[2]
-			# losses[iter_num, 4] = loss_class[3]
+			losses[iter_num, 2] = loss_class[1]
+			losses[iter_num, 3] = loss_class[2]
+			losses[iter_num, 4] = loss_class[3]
 
-			# iter_num += 1
+			iter_num += 1
 
-			# progbar.update(iter_num, [('rpn_cls', np.mean(losses[:iter_num, 0])), ('rpn_regr', np.mean(losses[:iter_num, 1])),
-			# 						  ('detector_cls', np.mean(losses[:iter_num, 2])), ('detector_regr', np.mean(
-			# 							  losses[:iter_num, 3])),
-			# 						  ("average number of objects", len(selected_pos_samples))])
+			progbar.update(iter_num, [('rpn_cls', np.mean(losses[:iter_num, 0])), ('rpn_regr', np.mean(losses[:iter_num, 1])),
+									  ('detector_cls', np.mean(losses[:iter_num, 2])), ('detector_regr', np.mean(
+										  losses[:iter_num, 3])),
+									  ("average number of objects", len(selected_pos_samples))])
 
-			# if iter_num == epoch_length: #at the end of every epoch 
-			# 	loss_rpn_cls = np.mean(losses[:, 0])
-			# 	loss_rpn_regr = np.mean(losses[:, 1])
-			# 	loss_class_cls = np.mean(losses[:, 2])
-			# 	loss_class_regr = np.mean(losses[:, 3])
-			# 	class_acc = np.mean(losses[:, 4])
+			if iter_num == epoch_length: #at the end of every epoch 
+				loss_rpn_cls = np.mean(losses[:, 0])
+				loss_rpn_regr = np.mean(losses[:, 1])
+				loss_class_cls = np.mean(losses[:, 2])
+				loss_class_regr = np.mean(losses[:, 3])
+				class_acc = np.mean(losses[:, 4])
 
-			# 	mean_overlapping_bboxes = float(
-			# 		sum(rpn_accuracy_for_epoch)) / len(rpn_accuracy_for_epoch)
-			# 	rpn_accuracy_for_epoch = []
+				mean_overlapping_bboxes = float(
+					sum(rpn_accuracy_for_epoch)) / len(rpn_accuracy_for_epoch)
+				rpn_accuracy_for_epoch = []
 
-			# 	if C.verbose:
-			# 		print('Mean number of bounding boxes from RPN overlapping ground truth boxes: {}'.format(
-			# 			mean_overlapping_bboxes))
-			# 		print(
-			# 			'Classifier accuracy for bounding boxes from RPN: {}'.format(class_acc))
-			# 		print('Loss RPN classifier: {}'.format(loss_rpn_cls))
-			# 		print('Loss RPN regression: {}'.format(loss_rpn_regr))
-			# 		print('Loss Detector classifier: {}'.format(loss_class_cls))
-			# 		print('Loss Detector regression: {}'.format(loss_class_regr))
-			# 		print('Elapsed time: {}'.format(time.time() - start_time))
-			# 		elapsed_time = (time.time()-start_time)/60
+				if C.verbose:
+					print('Mean number of bounding boxes from RPN overlapping ground truth boxes: {}'.format(
+						mean_overlapping_bboxes))
+					print(
+						'Classifier accuracy for bounding boxes from RPN: {}'.format(class_acc))
+					print('Loss RPN classifier: {}'.format(loss_rpn_cls))
+					print('Loss RPN regression: {}'.format(loss_rpn_regr))
+					print('Loss Detector classifier: {}'.format(loss_class_cls))
+					print('Loss Detector regression: {}'.format(loss_class_regr))
+					print('Elapsed time: {}'.format(time.time() - start_time))
+					elapsed_time = (time.time()-start_time)/60
 
-			# 	curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
-			# 	iter_num = 0
-			# 	start_time = time.time()
+				curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
+				iter_num = 0
+				start_time = time.time()
 
-			# 	if curr_loss < best_loss:
-			# 		if C.verbose:
-			# 			print('Total loss decreased from {} to {}, saving weights'.format(
-			# 				best_loss, curr_loss))
-			# 		best_loss = curr_loss
-			# 		#model_all.save_weights(C.model_path)
-			# 		model_all_new.save_weights(C.model_path)
-			# 	new_row = {'mean_overlapping_bboxes': round(mean_overlapping_bboxes, 3), 'class_acc': round(class_acc, 3), 'loss_rpn_cls': round(loss_rpn_cls, 3), 'loss_rpn_regr': round(
-			# 		loss_rpn_regr, 3), 'loss_class_cls': round(loss_class_cls, 3), 'loss_class_regr': round(loss_class_regr, 3), 'curr_loss': round(curr_loss, 3), 'elapsed_time': round(elapsed_time, 3), 'mAP': 0}
-			# 	record_df = record_df.append(
-			# 		new_row, ignore_index=True)
-			# 	record_df.to_csv(C.record_path, index=0)
+				if curr_loss < best_loss:
+					if C.verbose:
+						print('Total loss decreased from {} to {}, saving weights'.format(
+							best_loss, curr_loss))
+					best_loss = curr_loss
+					#model_all.save_weights(C.model_path)
+					model_all_new.save_weights(C.model_path)
+				new_row = {'mean_overlapping_bboxes': round(mean_overlapping_bboxes, 3), 'class_acc': round(class_acc, 3), 'loss_rpn_cls': round(loss_rpn_cls, 3), 'loss_rpn_regr': round(
+					loss_rpn_regr, 3), 'loss_class_cls': round(loss_class_cls, 3), 'loss_class_regr': round(loss_class_regr, 3), 'curr_loss': round(curr_loss, 3), 'elapsed_time': round(elapsed_time, 3), 'mAP': 0}
+				record_df = record_df.append(
+					new_row, ignore_index=True)
+				record_df.to_csv(C.record_path, index=0)
 
-			# 	break
+				break
 
 		except Exception as e:
 			print('Exception: {}'.format(e))

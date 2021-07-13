@@ -11,13 +11,13 @@ from keras.utils import layer_utils
 from keras.utils.data_utils import get_file
 
 
-def OcclusionNet(input_height=7,input_width=7,input_channel=512):
+def OcclusionNet(input_height=7,input_width=7,input_channel=512, conv_output_channel=512):
   input=Input(shape=(input_height,input_width,input_channel))
 
 #   convolution
-  x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block1_conv1')(input)
-  x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)
-  x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block1_conv3')(x)
+  x = Conv2D(conv_output_channel, (3, 3), activation='relu', padding='same', name='block1_conv1')(input)
+  x = Conv2D(conv_output_channel, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)
+  x = Conv2D(conv_output_channel, (3, 3), activation='relu', padding='same', name='block1_conv3')(x)
 
   o=Conv2D(1, (3, 3), activation='sigmoid', padding='same', name='block1_conv4')(x)
   

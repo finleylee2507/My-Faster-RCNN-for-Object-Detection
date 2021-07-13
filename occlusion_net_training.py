@@ -8,6 +8,7 @@ from optparse import OptionParser
 import pickle
 import os
 import pandas as pd
+import math 
 import keras
 from keras import backend as K
 from keras.optimizers import Adam, SGD, RMSprop
@@ -52,7 +53,7 @@ parser.add_option("--num_epochs", type="int", dest="num_epochs",
 parser.add_option("--config_filename", dest="config_filename", help="Location to store all the metadata related to the training (to be used when testing).",
 				  default="config.pickle")
 parser.add_option("--output_weight_path", dest="output_weight_path",
-				  help="Output path for weights.", default='./model_frcnn.hdf5')
+				  help="Output path for weights.", default='./models/vgg/vgg_occlusion_net.hdf5')
 parser.add_option("--input_weight_path_rcnn", dest="input_weight_path_rcnn",
 				  help="Input path for weights (rcnn). If not specified, will try to load default weights provided by keras.", default=None)
 parser.add_option("--rpn", dest="rpn_weight_path",
@@ -73,6 +74,8 @@ parser.add_option("--input_weight_path_occlusion", dest="input_weight_path_occlu
 				  help="Input path for weights (occlusion net). If not specified, will try to load default weights provided by keras.", default=None)
 parser.add_option("--load_occlusion", dest="load_occlusion",
 				  help="What model to load for the occlusion net", default=None)
+parser.add_option("--occlusion_conv_output_channel", dest="occlusion_conv_output_channel",
+				  help="The output channel size for the conv layer in the occlusion network", type=int, default=512)
 
 (options, args) = parser.parse_args()
 
@@ -119,8 +122,9 @@ if not os.path.isdir("models"):
 if not os.path.isdir("models/"+options.network):
 	os.mkdir(os.path.join("models", options.network))
 
-C.model_path = os.path.join(
-	"models", options.network, options.dataset+"_occlusion_net"+".hdf5")
+# C.model_path = os.path.join(
+# 	"models", options.network, options.dataset+"_occlusion_net"+".hdf5")
+C.model_path=options.output_weight_path
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -242,7 +246,7 @@ model_new_classifier = Model(new_classifier_part2_input, new_classifier_part2)
 
 # the occlusion net model
 model_occlusion_net = occlusion.OcclusionNet(
-	input_height=7, input_width=7, input_channel=512)
+	input_height=7, input_width=7, input_channel=512,conv_output_channel=options.occlusion_conv_output_channel)
 
 # DON'T NEED THIS FOR THE OCCLUSION NET TRAINING
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
@@ -288,7 +292,7 @@ else:
 	print("no previous rcnn model was loaded")
 
 
-if options.load_occlusion is not None:  # loading pretrained occlusion network
+if options.load_occlusion is not None:  # Resume training, loading pretrained occlusion network
 	print("loading previous occlusion model from ", options.load_occlusion)
 	model_occlusion_net.load_weights(options.load_occlusion, by_name=True)
 
@@ -303,14 +307,14 @@ if options.load_occlusion is not None:  # loading pretrained occlusion network
 	print('Already train %dK batches' % (len(record_df)))
 	print("Resume training")
 
-elif options.input_weight_path_occlusion is not None:
+elif options.input_weight_path_occlusion is not None: #Initialize training with pretrained weight 
 	print("loading pretrained occlusion net weight from, ",
 		  options.input_weight_path_occlusion)
 	model_occlusion_net.load_weights(
 		options.input_weight_path_occlusion, by_name=True)
 
 	# create record table
-	record_df = pd.DataFrame(columns=['training loss', 'precision','recall','f1 score' 'elapsed time', 'accuracy'])
+	record_df = pd.DataFrame(columns=['training loss', 'precision','recall', 'f1 score', 'elapsed time','accuracy'])
 else:
 	print("No previous occlusion model or pretrained weight loaded")
 
@@ -517,11 +521,11 @@ for epoch_num in range(starting_epoch, num_epochs):
 			# print(x_occlude.shape)
 			# print(y_occlude.shape)
 
-			prediction = model_occlusion_net.predict_on_batch(
-				x_occlude)  # comment out later
+			# prediction = model_occlusion_net.predict_on_batch(
+			# 	x_occlude)  # comment out later
 
-			print("Prediction: ", prediction[0, :, :, :])
-			print("Ground truth: ", y_occlude[0, :, :, :])
+			# print("Prediction: ", prediction[0, :, :, :])
+			# print("Ground truth: ", y_occlude[0, :, :, :])
 
 			# print("Ground truth level 1: ",y_occlude[0,:,:,0])
 			# print("Ground truth level 2: ",y_occlude[0,:,:,1])
@@ -539,10 +543,15 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 			# test_sample=x_occlude[:1,:,:,:]
 
+			#check for empty sample 
+			if(len(x_occlude)==0):
+				continue 
+
+
 			occlusion_loss = model_occlusion_net.train_on_batch(
 				x_occlude, y_occlude)
 
-			print("Occlusion loss: ", occlusion_loss)
+			# print("Occlusion loss: ", occlusion_loss)
 			
 			# store the training loss
 			losses[iter_num, 0] = occlusion_loss[0]  
@@ -555,18 +564,21 @@ for epoch_num in range(starting_epoch, num_epochs):
 			#store the f1 score
 			losses[iter_num,4]=occlusion_loss[4]
 
+			# if(math.isnan(occlusion_loss[0])): #for debugging purpose 
+			# 	sys.exit()
+
 			iter_num += 1
 		
-			progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), ('accuracy', np.mean(
-				losses[:iter_num, 1])),('precision',np.mean(losses[:iter_num,2])),('recall',np.mean(losses[:iter_num,3])),('f1 score',np.mean(losses[:iter_num,4]))])  # display progress bar
+			progbar.update(iter_num, [('loss', np.nanmean(losses[:iter_num, 0])), ('accuracy', np.nanmean(
+				losses[:iter_num, 1])),('precision',np.nanmean(losses[:iter_num,2])),('recall',np.nanmean(losses[:iter_num,3])),('f1 score',np.nanmean(losses[:iter_num,4]))])  # display progress bar
 
 			# at the end of every epoch
 			if iter_num == epoch_length:
-				epoch_loss = np.mean(losses[:, 0])
-				epoch_accuracy = np.mean(losses[:, 1])
-				epoch_precision=np.mean(losses[:,2])
-				epoch_recall=np.mean(losses[:,3])
-				epoch_f1=np.mean(losses[:,4])
+				epoch_loss = np.nanmean(losses[:, 0])
+				epoch_accuracy = np.nanmean(losses[:, 1])
+				epoch_precision=np.nanmean(losses[:,2])
+				epoch_recall=np.nanmean(losses[:,3])
+				epoch_f1=np.nanmean(losses[:,4])
 
 				if C.verbose:
 					print('Training loss: {}'.format(epoch_loss))

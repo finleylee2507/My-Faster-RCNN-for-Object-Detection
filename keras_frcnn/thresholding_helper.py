@@ -20,9 +20,9 @@ def threshold_by_sampling(input,k,n):
   num1=int(num_of_elements*k) 
   num2=int(num1*n)
   # print("selected:", temp[:num1])
-  selected_indices1=temp_indices[:num1] #grab the indices of the selected elements 
+  selected_indices1=temp_indices[:num1] #grab the indices of the selected top k elements 
 
-  #perform a random select on the selected elements 
+  #perform a random selection on the selected elements 
   selected_indices2=np.random.choice(selected_indices1,size=num2)
 
   #map the result back to the original 2d array and perform thresholding 
@@ -32,3 +32,24 @@ def threshold_by_sampling(input,k,n):
     result[row,col]=1 
 
   return result 
+
+
+
+
+def random_thresholding(input,n):
+  ###note: input is a 7x7 numpy array, 0<n<=1
+ 
+  (height,width)=input.shape
+  result=np.zeros((height,width))
+  num=height*width
+  selected_num=int(num*n)
+  selected_indices=np.random.choice(num,selected_num,replace=True)
+
+  for index in selected_indices:
+    row=index//width
+    col=index%width 
+
+    result[row,col]=1 
+
+  return result
+
