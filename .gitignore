@@ -99,8 +99,10 @@ TEST/
 test_images/
 VISUALIZE/
 output/ 
+TRAIN_EXPERIMENT/
 
 #files
 NEW_TRAIN.zip
 VISUALIZE.zip
+TRAIN_EXPERIMENT.zip
 

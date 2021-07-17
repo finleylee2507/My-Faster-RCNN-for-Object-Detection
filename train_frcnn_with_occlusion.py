@@ -128,7 +128,14 @@ if not os.path.isdir("models"):
 	os.mkdir("models")
 if not os.path.isdir("models/"+options.network):
 	os.mkdir(os.path.join("models", options.network))
-C.model_path = os.path.join("models", options.network, options.dataset+"_with_occlusion"+".hdf5")
+
+#define the output weight path (where the weights are stored)
+if(options.output_weight_path):
+	C.model_path=options.output_weight_path
+else:
+	C.model_path = os.path.join("models", options.network, options.dataset+"_with_occlusion"+".hdf5")
+print("Weights are being saved to: ",C.model_path)
+
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -453,8 +460,9 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 
 					if(options.thresholding=='sampling'): #apply sampling thresholding 
-						processed_output=thresholding_helper.threshold_by_sampling(occlusion_prediction[0,:,:,0],1/2,1/3) #could tweak the parameters 
-						# print(processed_output) 
+						print("Prediction: ",occlusion_prediction[0,:,:,0])
+						processed_output=thresholding_helper.threshold_by_sampling(occlusion_prediction[0,:,:,0],1/3,1/2) #could tweak the parameters 
+						print("Processed output: ", processed_output) 
 
 						for row in range(0,processed_output.shape[0]):
 							for col in range(0,processed_output.shape[1]):
