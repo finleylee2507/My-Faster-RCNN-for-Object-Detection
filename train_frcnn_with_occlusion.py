@@ -41,7 +41,7 @@ parser.add_option("-n", "--num_rois", type="int", dest="num_rois",
 				  help="Number of RoIs to process at once.", default=10)
 parser.add_option("--network", dest="network",
 				  help="Base network to use. Supports vgg or resnet50.", default='vgg')
-parser.add_option("--hf", dest="horizontal_flips", help="Augment with horizontal flips in training. (Default=true).", action="store_false", default=True)
+parser.add_option("--hf", dest="horizontal_flips", help="Augment with horizontal flips in training. (Default=true).", action="store_true", default=False)
 parser.add_option("--vf", dest="vertical_flips", help="Augment with vertical flips in training. (Default=false).", action="store_true", default=False)
 parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degree rotations in training. (Default=false).",
 				  action="store_true", default=False)
@@ -75,7 +75,7 @@ parser.add_option("--input_weight_path_occlusion", dest="input_weight_path_occlu
 
 #Whether to use occlusion augmentation or not 
 parser.add_option("--isOcclude", dest="isOcclude",
-				  help="Whether to apply occlusion augmentation to training images or not. If not, execute the normal faster-rcnn training", action="store_true", default=False)
+				  help="Whether to apply occlusion augmentation to training images or not. If not, execute the normal faster-rcnn training", default=False)
 parser.add_option("--thresholding", dest="thresholding",
 				  help="What type of thresholding to apply for the occlusion net output. Choose from direct, sampling or random", default='direct')
 
@@ -439,13 +439,13 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 
 			pooling_output=model_pooling.predict_on_batch([X, X2[:, sel_samples, :]])
-			print(pooling_output.shape)
+			# print(pooling_output.shape)
 			
 			###Perform occlusion augmentation (if enabled)
 			pooling_output_copy=np.copy(pooling_output) #make a copy of the pooling layer output to be further processed/or leave it as it is  
 			if(bool(options.isOcclude)):
 
-
+				# print("Here!")
 				for i in range(0,C.num_rois): #iterate over all the ROIs 
 					temp_sample=pooling_output_copy[:,i]
 					occlusion_prediction=model_occlusion_net.predict_on_batch(temp_sample)
@@ -460,9 +460,9 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 
 					if(options.thresholding=='sampling'): #apply sampling thresholding 
-						print("Prediction: ",occlusion_prediction[0,:,:,0])
+						# print("Prediction: ",occlusion_prediction[0,:,:,0])
 						processed_output=thresholding_helper.threshold_by_sampling(occlusion_prediction[0,:,:,0],1/3,1/2) #could tweak the parameters 
-						print("Processed output: ", processed_output) 
+						# print("Processed output: ", processed_output) 
 
 						for row in range(0,processed_output.shape[0]):
 							for col in range(0,processed_output.shape[1]):
