@@ -237,7 +237,7 @@ rpn = nn.rpn(shared_layers, num_anchors)
 
 new_classifier_part1=nn.new_classifier_part1(shared_layers, roi_input, C.num_rois)
 
-new_classifier_part2=nn.new_classifier_part2(new_classifier_part2_input,nb_classes=len(classes_count))
+new_classifier_part2=nn.new_classifier_part2(shared_layers,new_classifier_part2_input,nb_classes=len(classes_count))
 
 model_rpn = Model(img_input, rpn[:2])
 
@@ -318,16 +318,30 @@ model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
 	num_anchors), losses.rpn_loss_regr(num_anchors)])
 
 #the new network 
-model_pooling.compile(optimizer='sgd',loss='mae') #compile with random parameters 
+model_pooling.compile(optimizer=optimizer_classifier,loss='mae') #compile with random parameters 
 model_new_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
 	len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 
 model_all_new.compile(optimizer='sgd', loss='mae')
 model_occlusion_net.compile(optimizer='sgd',loss='mae')
 
+print("Model rpn summary: ")
+model_rpn.summary()
+
+print("Model pooling summary: ")
+
 model_pooling.summary()
+
+print("Model classifier summary: ")
+model_new_classifier.summary()
+print("Model all summary: ")
 model_all_new.summary()
-model_occlusion_net.summary()
+
+if(bool(options.isOcclude)):
+	print("Model occlusion summary: ")
+	model_occlusion_net.summary()
+
+
 # training settings
 
 
@@ -445,7 +459,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 			pooling_output_copy=np.copy(pooling_output) #make a copy of the pooling layer output to be further processed/or leave it as it is  
 			if(bool(options.isOcclude)):
 
-				# print("Here!")
+				#print("Here!")
 				for i in range(0,C.num_rois): #iterate over all the ROIs 
 					temp_sample=pooling_output_copy[:,i]
 					occlusion_prediction=model_occlusion_net.predict_on_batch(temp_sample)

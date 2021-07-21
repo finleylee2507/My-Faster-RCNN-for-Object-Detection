@@ -18,6 +18,7 @@ from keras.utils.data_utils import get_file
 from keras import backend as K
 from keras_frcnn.RoiPoolingConv import RoiPoolingConv 
 from keras_frcnn.RoiPoolingConvCoordinates import RoiPoolingConvCoordinates
+from keras_frcnn.PoolingOutputProcessor import PoolingOutputProcessor
 
 
 def get_weight_path():
@@ -124,6 +125,37 @@ def classifier(base_layers, input_rois, num_rois, nb_classes = 21, trainable=Fal
 	out_regr = TimeDistributed(Dense(4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='dense_regress_{}'.format(nb_classes))(out)
 
 	return [out_class, out_regr]
+
+def pure_experiment(base_layers, input_rois, num_rois, nb_classes = 21, occlusion_path='',isUseOcclusion=False,thresholding_option='direct'):
+	# compile times on theano tend to be very high, so we use smaller ROI pooling regions to workaround
+
+	if K.backend() == 'tensorflow':
+		pooling_regions = 7
+		input_shape = (num_rois,7,7,512)
+		# input_shape = (None,7,7,512)
+		
+	elif K.backend() == 'theano':
+		pooling_regions = 7
+		input_shape = (num_rois,512,7,7)
+		# input_shape = (None,512,7,7)
+
+	out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
+	if(isUseOcclusion):
+		out=PoolingOutputProcessor(pooling_regions,num_rois)(out_roi_pool,occlusion_path,thresholding_option)
+	else:
+		out=out_roi_pool
+	out = TimeDistributed(Flatten(name='flatten'))(out_roi_pool)
+	out = TimeDistributed(Dense(4096, activation='relu', name='fc1'))(out)
+	out = TimeDistributed(Dropout(0.5))(out)
+	out = TimeDistributed(Dense(4096, activation='relu', name='fc2'))(out)
+	out = TimeDistributed(Dropout(0.5))(out)
+
+	out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'), name='dense_class_{}'.format(nb_classes))(out)
+	# note: no regression target for bg class
+	out_regr = TimeDistributed(Dense(4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='dense_regress_{}'.format(nb_classes))(out)
+
+	return [out_class, out_regr]		
+
 
 def new_classifier_part1(base_layers, input_rois, num_rois):
 

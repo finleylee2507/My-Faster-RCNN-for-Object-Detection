@@ -8,6 +8,7 @@ from optparse import OptionParser
 import pickle
 import os
 import pandas as pd
+import keras 
 from keras import backend as K
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.layers import Input
@@ -17,10 +18,11 @@ from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from matplotlib import pyplot as plt 
-
+from keras_frcnn import vgg_occlusion_net as occlusion
 if 'tensorflow' == K.backend():
 	import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
+from keras_frcnn import thresholding_helper
 config2 = tf.ConfigProto()
 config2.gpu_options.allow_growth = True
 set_session(tf.Session(config=config2))
@@ -32,7 +34,7 @@ parser = OptionParser()
 parser.add_option("-p", "--path", dest="train_path",
 				  help="Path to training data.")
 parser.add_option("--rp", "--record_path", dest="record_path",
-				  help="Path to the record path.", default='./models/records/record_voc.csv')
+				  help="Path to the record path.", default='./models/records/record_vgg_voc_with_occlusion.csv')
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
 				  default="pascal_voc")
 parser.add_option("-n", "--num_rois", type="int", dest="num_rois",
@@ -46,9 +48,9 @@ parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degr
 parser.add_option("--num_epochs", type="int", dest="num_epochs",
 				  help="Number of epochs.", default=50)
 parser.add_option("--config_filename", dest="config_filename", help="Location to store all the metadata related to the training (to be used when testing).",
-				  default="config.pickle")
+				  default="config_with_occlusion.pickle")
 parser.add_option("--output_weight_path", dest="output_weight_path",
-				  help="Output path for weights.", default='')
+				  help="Output path for weights.", default='./model_frcnn.hdf5')
 parser.add_option("--input_weight_path", dest="input_weight_path",
 				  help="Input path for weights. If not specified, will try to load default weights provided by keras.", default=None)
 parser.add_option("--rpn", dest="rpn_weight_path",
@@ -66,6 +68,17 @@ parser.add_option("--cat", dest="cat",
 parser.add_option("--lr", dest="lr", help="learn rate",
 				  type=float, default=1e-3)
 
+####IMPORTANT NEW STUFFS 
+#Path to the occlusion net model  
+parser.add_option("--input_weight_path_occlusion", dest="input_weight_path_occlusion",
+				  help="Input path for weights (occlusion net). If not specified, will try to load default weights provided by keras.", default=None)
+
+#Whether to use occlusion augmentation or not 
+parser.add_option("--isOcclude", dest="isOcclude",
+				  help="Whether to apply occlusion augmentation to training images or not. If not, execute the normal faster-rcnn training", default=False)
+parser.add_option("--thresholding", dest="thresholding",
+				  help="What type of thresholding to apply for the occlusion net output. Choose from direct, sampling or random", default='direct')
+
 (options, args) = parser.parse_args()
 
 if not options.train_path:   # if filename is not given
@@ -81,7 +94,8 @@ else:
 
 # pass the settings from the command line, and persist them in the config object
 
-
+if(bool(options.isOcclude)):
+	print("Applying occlusion net augmentation.")
 
 config_output_filename = options.config_filename
 
@@ -91,6 +105,7 @@ if os.path.exists(config_output_filename):
 	with open(config_output_filename, 'rb') as f_in:
 		C = pickle.load(f_in)
 else:
+	print("Can't find previous config file. Initializing a new one.")
 	C = config.Config()
 	C.class_mapping={}
 
@@ -98,15 +113,15 @@ else:
 
 
 C.use_horizontal_flips = bool(options.horizontal_flips)
-print("Horizontal flips?")
-print(C.use_horizontal_flips)
+print("Horizontal flips: ",C.use_horizontal_flips)
+
 
 C.use_vertical_flips = bool(options.vertical_flips)
-print("Vertical flips? ")
-print(C.use_vertical_flips)
+print("Vertical flips: ",C.use_vertical_flips)
+
 C.rot_90 = bool(options.rot_90)
-print("Rotational? ")
-print(C.rot_90)
+print("Rotational: ", C.rot_90)
+
 
 # mkdir to save models. (for example if vgg is chosen, a folder name "vgg" will be created)
 if not os.path.isdir("models"):
@@ -118,8 +133,9 @@ if not os.path.isdir("models/"+options.network):
 if(options.output_weight_path):
 	C.model_path=options.output_weight_path
 else:
-	C.model_path = os.path.join("models", options.network, options.dataset+".hdf5")
+	C.model_path = os.path.join("models", options.network, options.dataset+"_with_occlusion"+".hdf5")
 print("Weights are being saved to: ",C.model_path)
+
 C.record_path = options.record_path  # get the path to store the record
 C.num_rois = int(options.num_rois)
 
@@ -146,8 +162,8 @@ else:
 	print('Not a valid model')
 	raise ValueError
 
-print("Loaded pretrained weight: ",options.input_weight_path)
-print("Loaded pretrained model: ",options.load)
+print("Input rcnn weight path",options.input_weight_path)
+print("Loading: ",options.load)
 # check if weight path was passed via command line
 if options.input_weight_path:
 	C.base_net_weights = options.input_weight_path
@@ -169,9 +185,6 @@ else:
 	if 'bg' not in classes_count:
 		classes_count['bg'] = 0
 		C.class_mapping = class_mapping
-
-
-
 
 
 inv_map = {v: k for k, v in class_mapping.items()}
@@ -202,8 +215,8 @@ print('Num val samples {}'.format(len(val_imgs)))
 
 data_gen_train = data_generators.get_anchor_gt(
 	train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_val = data_generators.get_anchor_gt(
-	val_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
+# data_gen_val = data_generators.get_anchor_gt(
+# 	val_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
 
 if K.image_dim_ordering() == 'th':
 	input_shape_img = (3, None, None)
@@ -213,21 +226,30 @@ else:
 img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
 
-# define the base network (resnet here, can be VGG, Inception, etc)
+
 shared_layers = nn.nn_base(img_input, trainable=True)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
 rpn = nn.rpn(shared_layers, num_anchors)
 
-classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
+
+if(options.isOcclude):
+	classifier=nn.pure_experiment(shared_layers, roi_input, C.num_rois, nb_classes=len(
+		classes_count), occlusion_path=options.input_weight_path_occlusion,isUseOcclusion=False)
+else:
+	classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
 	classes_count), trainable=True)
 
-model_rpn = Model(img_input, rpn[:2])
-model_classifier = Model([img_input, roi_input], classifier)
 
+model_rpn = Model(img_input, rpn[:2])
+
+
+
+model_classifier = Model([img_input, roi_input], classifier)
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
 model_all = Model([img_input, roi_input], rpn[:2] + classifier)
+
 
 # load pretrained weights (maybe be overridden later)
 try:
@@ -257,6 +279,7 @@ if options.load is not None:  # with pretrained FRCNN model
 	print("Resuming training. Loading previous model from ", options.load)
 	model_rpn.load_weights(options.load, by_name=True)
 	model_classifier.load_weights(options.load, by_name=True)
+
 	# load the records
 	record_df = pd.read_csv(C.record_path)
 	r_mean_overlapping_bboxes = record_df['mean_overlapping_bboxes']
@@ -270,7 +293,6 @@ if options.load is not None:  # with pretrained FRCNN model
 	r_mAP = record_df['mAP']
 	print('Already train %dK batches' % (len(record_df)))
 
-	
 elif options.rpn_weight_path is not None:  # with pretrained RPN
 	print("loading RPN weights from ", options.rpn_weight_path)
 	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
@@ -282,19 +304,39 @@ else:
 	record_df = pd.DataFrame(columns=['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls',
 									  'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'curr_loss', 'elapsed_time', 'mAP'])
 
+# #Load the occlusion net weight
+# if options.input_weight_path_occlusion is not None:
+# 	print("loading occlusion model from ", options.input_weight_path_occlusion)
+	
+
 # compile the model AFTER loading weights!
 model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(
 	num_anchors), losses.rpn_loss_regr(num_anchors)])
+
 model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
 	len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
 
+# #the new network 
+# model_pooling.compile(optimizer=optimizer_classifier,loss='mae') #compile with random parameters 
+# model_new_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(
+# 	len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
+
+# model_all_new.compile(optimizer='sgd', loss='mae')
+# model_occlusion_net.compile(optimizer='sgd',loss='mae')
+
 print("Model rpn summary: ")
 model_rpn.summary()
+
+
+
 print("Model classifier summary: ")
 model_classifier.summary()
 print("Model all summary: ")
 model_all.summary()
+
+
+
 # training settings
 
 
@@ -302,8 +344,6 @@ epoch_length = int(options.epoch_length)
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
-# if(len(record_df) > 0):  # resume training from previous epoch
-#     num_epochs -= len(record_df)
 
 losses = np.zeros((epoch_length, 5))
 rpn_accuracy_rpn_monitor = []
@@ -332,6 +372,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 	if epoch_num < 3 and options.rpn_weight_path is not None:
 		K.set_value(model_rpn.optimizer.lr, options.lr/30)
 		K.set_value(model_classifier.optimizer.lr, options.lr/3)
+
 	#print out the learning rate each epoch for debugging purposes 
 	print("rpn learning rate: ",K.eval(model_rpn.optimizer.lr))
 	print("classifier learning rate: ",K.eval(model_classifier.optimizer.lr))
@@ -347,7 +388,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 				if mean_overlapping_bboxes == 0:
 					print(
 						'RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
-			X, Y, img_data = next(data_gen_train) #Note: X=resized img, Y=[np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data=object containing img info 
+			X, Y, img_data = next(data_gen_train)
 
 			loss_rpn = model_rpn.train_on_batch(X, Y)
 
@@ -407,6 +448,9 @@ for epoch_num in range(starting_epoch, num_epochs):
 			loss_class = model_classifier.train_on_batch(
 				[X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]]) #note: X=base layers, X2=input rois 
 
+
+				
+
 			losses[iter_num, 0] = loss_rpn[1]
 			losses[iter_num, 1] = loss_rpn[2]
 
@@ -453,6 +497,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 						print('Total loss decreased from {} to {}, saving weights'.format(
 							best_loss, curr_loss))
 					best_loss = curr_loss
+					#model_all.save_weights(C.model_path)
 					model_all.save_weights(C.model_path)
 				new_row = {'mean_overlapping_bboxes': round(mean_overlapping_bboxes, 3), 'class_acc': round(class_acc, 3), 'loss_rpn_cls': round(loss_rpn_cls, 3), 'loss_rpn_regr': round(
 					loss_rpn_regr, 3), 'loss_class_cls': round(loss_class_cls, 3), 'loss_class_regr': round(loss_class_regr, 3), 'curr_loss': round(curr_loss, 3), 'elapsed_time': round(elapsed_time, 3), 'mAP': 0}
