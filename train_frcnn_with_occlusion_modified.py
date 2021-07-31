@@ -23,9 +23,11 @@ if 'tensorflow' == K.backend():
 	import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 from keras_frcnn import thresholding_helper
+# tf.compat.v1.enable_eager_execution()
 config2 = tf.ConfigProto()
 config2.gpu_options.allow_growth = True
-set_session(tf.Session(config=config2))
+set_session(tf.Session(config=config2)) #original 
+
 
 sys.setrecursionlimit(40000)
 
@@ -235,8 +237,9 @@ rpn = nn.rpn(shared_layers, num_anchors)
 
 
 if(options.isOcclude):
+	
 	classifier=nn.pure_experiment(shared_layers, roi_input, C.num_rois, nb_classes=len(
-		classes_count), occlusion_path=options.input_weight_path_occlusion,isUseOcclusion=False)
+		classes_count), occlusion_path=options.input_weight_path_occlusion,isUseOcclusion=True)
 else:
 	classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(
 	classes_count), trainable=True)

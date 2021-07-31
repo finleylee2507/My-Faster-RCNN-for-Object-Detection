@@ -62,8 +62,6 @@ parser.add_option("--opt", dest="optimizers",
 				  help="set the optimizer to use", default="SGD")
 parser.add_option("--elen", dest="epoch_length",
 				  help="set the epoch length. def=1000", default=1000)
-parser.add_option("--load_rcnn", dest="load_rcnn",
-				  help="What model to load for the rcnn", default=None)
 parser.add_option("--dataset", dest="dataset",
 				  help="name of the dataset", default="voc")
 parser.add_option("--cat", dest="cat",
@@ -152,7 +150,7 @@ else:
 	raise ValueError
 
 print("Input weight path (rcnn): ", options.input_weight_path_rcnn)
-print("Loaded model (rcnn): ", options.load_rcnn)
+# print("Loaded model (rcnn): ", options.load_rcnn)
 
 print("Input weight path (occlusion net): ",
 	  options.input_weight_path_occlusion)
@@ -274,22 +272,22 @@ else:
 	optimizer_occlusion = Adam(lr=options.lr, clipnorm=0.001)
 
 
-# may use this to resume from rpn models or previous training. specify either rpn or frcnn model to load
-if options.load_rcnn is not None:  # with pretrained FRCNN model
-	print("loading previous rcnn model from ", options.load_rcnn)
-	model_rpn.load_weights(options.load_rcnn, by_name=True)
-	# model_classifier.load_weights(options.load, by_name=True)
-	# might not be necessary
-	model_pooling.load_weights(options.load_rcnn, by_name=True)
-	model_new_classifier.load_weights(options.load_rcnn, by_name=True)
+# # may use this to resume from rpn models or previous training. specify either rpn or frcnn model to load
+# if options.load_rcnn is not None:  # with pretrained FRCNN model
+# 	print("loading previous rcnn model from ", options.load_rcnn)
+# 	model_rpn.load_weights(options.load_rcnn, by_name=True)
+# 	# model_classifier.load_weights(options.load, by_name=True)
+# 	# might not be necessary
+# 	model_pooling.load_weights(options.load_rcnn, by_name=True)
+# 	model_new_classifier.load_weights(options.load_rcnn, by_name=True)
 
 
-elif options.rpn_weight_path is not None:  # with pretrained RPN
-	print("loading RPN weights from ", options.rpn_weight_path)
-	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
+# elif options.rpn_weight_path is not None:  # with pretrained RPN
+# 	print("loading RPN weights from ", options.rpn_weight_path)
+# 	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
 
-else:
-	print("no previous rcnn model was loaded")
+# else:
+# 	print("no previous rcnn/rpn model was loaded")
 
 
 if options.load_occlusion is not None:  # Resume training, loading pretrained occlusion network
@@ -451,19 +449,19 @@ for epoch_num in range(starting_epoch, num_epochs):
 			# print("Pooling output shape", pooling_output.shape)
 
 			# initialize training sample array
-			x_occlude = np.empty((len(selected_pos_samples), 7, 7, 512))
+			x_occlude = np.empty((C.num_rois, 7, 7, 512))
 			# initialize ground truth array
-			y_occlude = np.empty((len(selected_pos_samples), 7, 7, 1))
+			y_occlude = np.empty((C.num_rois, 7, 7, 1))
 
 			# iterate over the n rois
 
 			for i in range(0, C.num_rois):
 				sel_sample = sel_samples[i]
 				# print(i)
-				if(sel_sample in selected_neg_samples): #we skip the negative samples 
-					# print("Negative sample found!")
-					# print(sel_sample)
-					continue
+				# if(sel_sample in selected_neg_samples): #we skip the negative samples 
+				# 	# print("Negative sample found!")
+				# 	# print(sel_sample)
+				# 	continue
 
 				test1 = pooling_output[:, i]
   
