@@ -47,11 +47,6 @@ class NewPoolingOutputProcessor(Layer):
         # #unpack variables
         pooling_output=x[0]
         occlusion_mask=x[1]
-        # # print("Pooling: ", K.int_shape(pooling_output))
-        # # print("Mask: ",K.int_shape(occlusion_mask))
-        # print("Pooling: ", pooling_output)
-        # print("Mask: ",occlusion_mask)
-        # x=pooling_output
         zeros=K.zeros_like(pooling_output)
 
         #modify pooling_output based on the mask 

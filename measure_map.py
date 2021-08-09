@@ -238,7 +238,7 @@ for idx, img_data in enumerate(test_imgs):
 			ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
 			ROIs = ROIs_padded
 
-		[P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
+		[P_cls, P_regr] = model_classifier.predict([F, ROIs])
 
 		for ii in range(P_cls.shape[1]):
 
@@ -268,10 +268,15 @@ for idx, img_data in enumerate(test_imgs):
 
 	all_dets = []
 
+
 	for key in bboxes:
 		bbox = np.array(bboxes[key])
-
-		new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh=0.5)
+		print(bbox.shape)
+		print(bbox)
+		try:
+			new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh=0.5)
+		except:
+			continue
 		for jk in range(new_boxes.shape[0]):
 			(x1, y1, x2, y2) = new_boxes[jk, :]
 			det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk]}
@@ -294,3 +299,4 @@ for idx, img_data in enumerate(test_imgs):
 	print('mAP = {}'.format(np.mean(np.array(all_aps))))
 	#print(T)
 	#print(P)
+ 

@@ -62,6 +62,8 @@ parser.add_option("--opt", dest="optimizers",
 				  help="set the optimizer to use", default="SGD")
 parser.add_option("--elen", dest="epoch_length",
 				  help="set the epoch length. def=1000", default=1000)
+parser.add_option("--load_rcnn", dest="load_rcnn",
+				  help="What model to load for the rcnn", default=None)
 parser.add_option("--dataset", dest="dataset",
 				  help="name of the dataset", default="voc")
 parser.add_option("--cat", dest="cat",
@@ -150,7 +152,7 @@ else:
 	raise ValueError
 
 print("Input weight path (rcnn): ", options.input_weight_path_rcnn)
-# print("Loaded model (rcnn): ", options.load_rcnn)
+print("Loaded model (rcnn): ", options.load_rcnn)
 
 print("Input weight path (occlusion net): ",
 	  options.input_weight_path_occlusion)
@@ -272,22 +274,6 @@ else:
 	optimizer_occlusion = Adam(lr=options.lr, clipnorm=0.001)
 
 
-# # may use this to resume from rpn models or previous training. specify either rpn or frcnn model to load
-# if options.load_rcnn is not None:  # with pretrained FRCNN model
-# 	print("loading previous rcnn model from ", options.load_rcnn)
-# 	model_rpn.load_weights(options.load_rcnn, by_name=True)
-# 	# model_classifier.load_weights(options.load, by_name=True)
-# 	# might not be necessary
-# 	model_pooling.load_weights(options.load_rcnn, by_name=True)
-# 	model_new_classifier.load_weights(options.load_rcnn, by_name=True)
-
-
-# elif options.rpn_weight_path is not None:  # with pretrained RPN
-# 	print("loading RPN weights from ", options.rpn_weight_path)
-# 	model_rpn.load_weights(options.rpn_weight_path, by_name=True)
-
-# else:
-# 	print("no previous rcnn/rpn model was loaded")
 
 
 if options.load_occlusion is not None:  # Resume training, loading pretrained occlusion network
@@ -449,19 +435,19 @@ for epoch_num in range(starting_epoch, num_epochs):
 			# print("Pooling output shape", pooling_output.shape)
 
 			# initialize training sample array
-			x_occlude = np.empty((C.num_rois, 7, 7, 512))
+			x_occlude = np.empty((len(selected_pos_samples), 7, 7, 512))
 			# initialize ground truth array
-			y_occlude = np.empty((C.num_rois, 7, 7, 1))
+			y_occlude = np.empty((len(selected_pos_samples), 7, 7, 1))
 
 			# iterate over the n rois
 
 			for i in range(0, C.num_rois):
 				sel_sample = sel_samples[i]
 				# print(i)
-				# if(sel_sample in selected_neg_samples): #we skip the negative samples 
-				# 	# print("Negative sample found!")
-				# 	# print(sel_sample)
-				# 	continue
+				if(sel_sample in selected_neg_samples): #we skip the negative samples 
+					# print("Negative sample found!")
+					# print(sel_sample)
+					continue
 
 				test1 = pooling_output[:, i]
   
@@ -477,6 +463,9 @@ for epoch_num in range(starting_epoch, num_epochs):
 				best_col = 0
 				x_occlude[i] = test1  # append training sample
 
+
+			
+				
 				# iterate over the x and y dimension of the roi and applying a 2 x 2 sliding window on it
 				for j in range(0, 6):
 					for k in range(0, 6):
@@ -502,7 +491,7 @@ for epoch_num in range(starting_epoch, num_epochs):
 							best_row = j
 							best_col = k
 
-				#print(best_row, best_col)
+				# print("Best row and column: ",best_row, best_col)
 				ground_truth_mask = np.zeros((1, 7, 7, 1))
 
 				for row in range(0, 7):
@@ -513,33 +502,8 @@ for epoch_num in range(starting_epoch, num_epochs):
 
 						else:  # for the other pixels
 							ground_truth_mask[0, row, col, 0] = 0
-
+				# print(ground_truth_mask)
 				y_occlude[i] = ground_truth_mask
-
-			# print(x_occlude.shape)
-			# print(y_occlude.shape)
-
-			# prediction = model_occlusion_net.predict_on_batch(
-			# 	x_occlude)  # comment out later
-
-			# print("Prediction: ", prediction[0, :, :, :])
-			# print("Ground truth: ", y_occlude[0, :, :, :])
-
-			# print("Ground truth level 1: ",y_occlude[0,:,:,0])
-			# print("Ground truth level 2: ",y_occlude[0,:,:,1])
-
-			# for foo in range (0,10):
-			# 	checked=1
-			# 	for i in range(0,7):
-			# 		for j in range(0,7):
-			# 			if(y_occlude[foo,i,j,0]+y_occlude[foo,i,j,1]!=1):
-			# 				checked=0
-
-			# 	print("check? : ",checked)
-
-			# generate training samples
-
-			# test_sample=x_occlude[:1,:,:,:]
 
 			#check for empty sample 
 			if(len(x_occlude)==0):
