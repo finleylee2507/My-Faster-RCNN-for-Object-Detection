@@ -158,7 +158,7 @@ else:
 
 
 all_imgs, classes_count, class_mapping = get_data(
-	options.train_path, C, options.cat)
+	options.train_path, C, options.cat,mode='train')
 
 if not os.path.exists(config_output_filename): #only for new config file 
 	if 'bg' not in classes_count:

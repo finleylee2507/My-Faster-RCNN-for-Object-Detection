@@ -2,7 +2,7 @@ import numpy as np
 
 
 def threshold_by_sampling(input,k,n):
-#note: input=7x7 numpy array (dimension could change), 0<k<=1, 0<n<=1  
+#note: input=a x a numpy array (dimension could change), 0<k<=1, 0<n<=1  
   (height,width)=input.shape #get the height and width of the input array 
 
 
@@ -41,7 +41,7 @@ def threshold_by_sampling(input,k,n):
 
 
 def random_thresholding(input,n):
-  ###note: input is a 7x7 numpy array, 0<n<=1
+  ###note: input is a a x a numpy array, 0<n<=1
  
   (height,width)=input.shape
   result=np.zeros((height,width))
@@ -50,7 +50,7 @@ def random_thresholding(input,n):
   selected_indices=np.random.choice(num,selected_num,replace=False)
 
   for index in selected_indices:
-    row=index//width
+    row=index//height
     col=index%width 
 
     result[row,col]=1 

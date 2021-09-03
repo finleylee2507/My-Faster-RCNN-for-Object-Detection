@@ -19,7 +19,7 @@ def get_data(input_path, C,cat=None,mode='train'):
     visualise = False
 
     if(mode == 'train'):
-         data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
+         data_paths = [os.path.join(input_path, s) for s in ['VOC2012']]
     else:
         data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
         
@@ -32,7 +32,7 @@ def get_data(input_path, C,cat=None,mode='train'):
     for data_path in data_paths:
 
         annot_path = os.path.join(data_path, 'Annotations')
-        imgs_path = os.path.join(data_path, 'JPEGImages')
+        imgs_path = os.path.join(data_path, 'augmentedImages')
 
         # load all train images or only one category.
         #ignore all val images and treat them as train images 

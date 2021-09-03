@@ -14,6 +14,7 @@ from keras_frcnn import roi_helpers
 from keras_frcnn import data_generators
 from sklearn.metrics import average_precision_score
 
+### MEASURE THE mAP ON AN AUGMENTED VOC DATASET
 
 def get_map(pred, gt, f):
 	T = {}
@@ -96,7 +97,7 @@ if not options.test_path:   # if filename is not given
 
 
 if options.parser == 'pascal_voc':
-	from keras_frcnn.pascal_voc_parser import get_data
+	from keras_frcnn.pascal_voc_parser_augmented import get_data
 elif options.parser == 'simple':
 	from keras_frcnn.simple_parser import get_data
 else:
