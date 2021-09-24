@@ -37,6 +37,7 @@ parser.add_option("--network", dest="network", help="Base network to use. Suppor
 parser.add_option("--write", dest="write", help="to write out the image with detections or not.", action='store_true')
 parser.add_option("--gt",dest="gt",help="Whether to wrrite out images with ground truth boudning boxes for the VOC dataset", default=False)
 parser.add_option("--load", dest="load", help="specify model path.", default=None)
+parser.add_option("--result_path", dest="result_path", help="specify where to store the result (if enabled).", default='results')
 (options, args) = parser.parse_args()
 
 if not options.test_path:   # if filename is not given
@@ -193,7 +194,7 @@ all_imgs = []
 classes = {}
 
 # If the box classification value is less than this, we ignore this box
-bbox_threshold = 0.7
+bbox_threshold = 0.85
 
 visualise = True
 
@@ -208,11 +209,11 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	print(img_name)
 	st = time.time()
 	filepath = os.path.join(img_path,img_name)
-    
+	
 	img = cv2.imread(filepath)
 	gt_img=cv2.imread(filepath) #saved for later use 
 
-    # preprocess image
+	# preprocess image
 	X, ratio = format_img(img, C)
 	img_scaled = (np.transpose(X[0,:,:,:],(1,2,0)) + 127.5).astype('uint8')
 	if K.image_dim_ordering() == 'tf':
@@ -221,9 +222,9 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	[Y1, Y2, F] = model_rpn.predict(X)
 	
 	#overlap_thresh: If iou in NMS is larger than this threshold, drop the box
-	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.8)
+	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7)
 	print(R.shape)
-    
+	
 	# convert from (x1,y1,x2,y2) to (x,y,w,h)
 	R[:, 2] -= R[:, 0]
 	R[:, 3] -= R[:, 1]
@@ -249,7 +250,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 		
 
 		for ii in range(P_cls.shape[1]):
-             # Ignore 'bg' class or those with prob lower than the threshold 
+			 # Ignore 'bg' class or those with prob lower than the threshold 
 			if np.max(P_cls[0,ii,:]) < bbox_threshold or np.argmax(P_cls[0,ii,:]) == (P_cls.shape[2] - 1):
 				continue
 
@@ -271,7 +272,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 		bbox = np.array(bboxes[key])
 
 		#the higher the overlap threshold, the more overlapping boxes there are 
-		new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh = 0.1)
+		new_boxes, new_probs = roi_helpers.non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh = 0.5)
 		for jk in range(new_boxes.shape[0]):
 			(x1, y1, x2, y2) = new_boxes[jk,:]
 			(real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2) #get the real coordinate in the original image
@@ -282,7 +283,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 			all_dets.append((key,100*new_probs[jk]))
 
 			(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,0.5,1)
-			textOrg = ((real_x1+real_x2)//2, (real_y1+real_y2)//2)
+			textOrg = (real_x1, real_y1+10)
 
 			cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
 			cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
@@ -293,12 +294,16 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	print('Elapsed time = {}'.format(time.time() - st))
 	print(all_dets)
 	print(bboxes)
-    # enable if you want to show pics
+
+
+	# enable if you want to show pics
+	result_path=options.result_path
 	if options.write:
-           import os
-           if not os.path.isdir("results"):
-              os.mkdir("results")
-           cv2.imwrite('./results/{}.png'.format(idx),img)
+		
+		import os
+		if not os.path.isdir(result_path):
+			os.mkdir(result_path)
+		cv2.imwrite('./{}/{}.png'.format(result_path,idx),img)
 
 	#if the user requested the ground truth images to be printed, write them with the gt bounding boxes to a new directory 
 	if options.gt: 
