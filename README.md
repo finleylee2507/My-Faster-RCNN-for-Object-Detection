@@ -8,7 +8,8 @@
 
 - **MobileNetv1 & v2 support!**
 
-- **VGG support!**
+- **VGG support!** 
+- **NEW:Generative Adversarial Occlusion Network for hard examples generation (Authored by Finley Li)!**
 
 - added eval for pascal_voc :)
 
