@@ -11,7 +11,7 @@
 - **VGG support!** 
 - **NEW:Generative Adversarial Occlusion Network for hard examples generation (Authored by Finley Li)!**
 
-- added eval for pascal_voc :)
+
 
 Stars and forks are appreciated if this repo helps your project, will motivate me to support this repo. 
 
